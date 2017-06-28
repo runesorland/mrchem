@@ -20,6 +20,7 @@
 #include "TelePrompter.h"
 #include "MathUtils.h"
 #include "Plot.h"
+#include "Molecule.h"//rune added 28.6.17
 
 #include "FunctionTree.h"
 #include "ABGVOperator.h"
@@ -513,77 +514,81 @@ Testing the Cavity class,(cavityFunction.h) and calculating the potential U
 *author Rune
 */
     
-    const int max_scale = MRA->getMaxScale();//
-
-    //MultiResolutionAnalysis<3> *MRA = initializeMRA<3>(); /defined before main
+    const int max_scale = MRA->getMaxScale();
     const double prec = Input.get<double>("rel_prec");
-    
-    GridGenerator<3> grid(max_scale);//grid = (old) G
-    // GridGenerator<3> G(*MRA);
-    MWProjector<3> project(prec, max_scale);//project = (old) Q
-    // MWProjector<3> Q(*MRA, prec);
-    MWAdder<3> add(prec, max_scale); 
-    // MWAdder<3> add(*MRA, prec);
-    MWMultiplier<3> mult(prec, max_scale);
-    // MWMultiplier<3> mult(*MRA, prec);
+    const double build_prec = prec/10.0;
+    const double apply_prec = prec;
 
+    //Intitializing operators.
+    GridGenerator<3> grid(max_scale);
+
+    MWProjector<3> project(prec, max_scale);
+    
+    MWAdder<3> add(prec, max_scale); 
+    
+    MWMultiplier<3> mult(prec, max_scale);
+    
+    MWConvolution<3> apply_conv(apply_prec, MRA->getMaxScale());
+    PoissonOperator P(*MRA, build_prec);
+    
+    double boundary1 = 0.0, boundary2 = 0.0;
+    ABGVOperator<3> D(*MRA, boundary1, boundary2);
+    MWDerivative<3> applyDerivative(max_scale);
+
+
+    //Importing molecular information.
     std::vector<std::string> mol_coords = Input.getData("Molecule.coords");
     Molecule mol(mol_coords);
     mol.printGeometry();
 
-//Plotting parameters for surfPlot
+    //Plotting parameters for surfPlot
     double a[3] = { -4.0, -4.0, 0.0};
     double b[3] = { 4.0, 4.0, 0.0};
     Plot<3> plt(10000, a, b);
-//////////////////////
 
-//nice to have, for testing. r and 1/r.
+    //nice to have, for testing. r and 1/r.
     auto f1  = [] (const double *r) ->double {
         double R = 1/sqrt(r[0]*r[0]+ r[1]*r[1] + r[2]*r[2]);
         return R;
     };
     
-    FunctionTree<3> *one_over_rad = new FunctionTree<3>(*MRA);//
-    project(*one_over_rad, f1);// 
-    // FunctionTree<3> *one_over_rad = project(f1);	
+    FunctionTree<3> *one_over_rad = new FunctionTree<3>(*MRA);
+    project(*one_over_rad, f1);
+    
     plt.surfPlot(*one_over_rad, "one_over_rad");
+    
     auto f2 = [] (const double *r) ->double {
         double R = sqrt(r[0]*r[0]+ r[1]*r[1] + r[2]*r[2]);
         return R;
     };
     
-    FunctionTree<3> *rad = new FunctionTree<3>(*MRA);//
-    project(*rad,f2);//
-    // FunctionTree<3> *rad = project(f2);
-///////////////
-
-
-//making cavity
-/*
-double gives the slope of the cavity, lower double --> steeper slope.
-*/
+    FunctionTree<3> *rad = new FunctionTree<3>(*MRA);
+    project(*rad,f2);
+    
+    plt.surfPlot(*rad, "rad");
+    
+    //making cavity
     Nuclei &nucs = mol.getNuclei();
-    double slope = 0.2;
+    double slope = 0.2;//slope of cavity, lower double --> steeper slope.
+    double eps_0 = 1.0;
+    double eps_inf = 10.0;
 
-    CavityFunction cavity(nucs,slope);
+    CavityFunction cavity(nucs,slope,false, eps_0, eps_inf);
     FunctionTree<3> *eps_r = new FunctionTree<3>(*MRA);//
     project(*eps_r, cavity);//
-    // FunctionTree<3> *eps_r = Q(cavity);
 
 	//cavity invers
-    CavityFunction cavity_inv(nucs,slope,true);
+    CavityFunction cavity_inv(nucs,slope,true, eps_0, eps_inf);
     FunctionTree<3> *eps_r_inv = new FunctionTree<3>(*MRA);//
     project(*eps_r_inv, cavity_inv);//
-    // FunctionTree<3> *eps_r_inv = Q(cavity_inv);
-////////////////
 
-//making electron  density function
+    //making electron  density function
 /*
 should come from a HF calculation of.
 Now it is a single Gaussian located with peek
 at (0,0,0)
 */ 
-	//TODO should be more automatic!		
+	//TODO should be from DFT calculations!		
     double alpha = 50.0;
     double c = pow(alpha/pi,3.0/2.0);
     double pos[3] = {0, 0, 0};
@@ -591,29 +596,8 @@ at (0,0,0)
     GaussFunc<3> rho_r_analytic(alpha, c , pos, pov);
     FunctionTree<3> *rho_r = new FunctionTree<3>(*MRA);
     project(*rho_r, rho_r_analytic);
-    //FunctionTree<3> *rho_r = Q(rho_r_analytic);
 
-
-//making derivation operators, and de
-    
-    /*
-    DerivativeOperator<3> D_x(0, *MRA, 0.0, 0.0);
-    DerivativeOperator<3> D_y(1, *MRA, 0.0, 0.0);
-    DerivativeOperator<3> D_z(2, *MRA, 0.0, 0.0);
-
-    FunctionTree<3> *dx_eps_r = G(*eps_r);
-    FunctionTree<3> *dy_eps_r = G(*eps_r);
-    FunctionTree<3> *dz_eps_r = G(*eps_r);
-
-    D_x(*dx_eps_r, *eps_r, 0);
-    D_y(*dy_eps_r, *eps_r, 0);
-    D_z(*dz_eps_r, *eps_r, 0);
-    */
-	
-    double boundary1 = 0.0, boundary2 = 0.0;//
-    ABGVOperator<3> D(*MRA, boundary1, boundary2);//
-    MWDerivative<3> applyDerivative(max_scale);//
-
+    //derivation of dielectric function eps_r	
     FunctionTree<3> *dx_eps_r = new FunctionTree<3>(*MRA);//
     FunctionTree<3> *dy_eps_r = new FunctionTree<3>(*MRA);//
     FunctionTree<3> *dz_eps_r = new FunctionTree<3>(*MRA);//
@@ -634,19 +618,17 @@ at (0,0,0)
     FunctionTree<3> *rho_eff = new FunctionTree<3>(*MRA);
     FunctionTreeVector<3> mult_initial_vec;
     mult_initial_vec.push_back(1, &*eps_r_inv);
-    mult_initial_vec.push_back(1, &*eps_r);
+    mult_initial_vec.push_back(1, &*rho_r);
     mult(*rho_eff, mult_initial_vec);
     //FunctionTree<3> *rho_eff= mult(1, *eps_r_inv, *rho_r);
 
     plt.surfPlot(*rho_eff, "initial");
     TelePrompter::printHeader(0, "Constructing Poisson operator");
     
-    PoissonOperator P(*MRA, prec, prec);
 
     TelePrompter::printHeader(0, "Applying Poisson operator");
     FunctionTree<3> *U = new FunctionTree<3>(*MRA);//
-    //FunctionTree<3> *U = G();
-    P(*U,*rho_eff);
+    apply_conv(*U, P, *rho_eff);
 
 //SCF to solve for U, the potential.
     int iter = 1;
@@ -732,7 +714,9 @@ at (0,0,0)
 
         add(*func,sum_rho_gamma_vec);
 
-        FunctionTree<3> *U_new = P(*func);
+        FunctionTree<3> *U_new = new FunctionTree<3>(*MRA);
+        apply_conv(*U_new, P, *func);
+                       
 
         //error calcultation, norm
         FunctionTree<3> *err = new FunctionTree<3>(*MRA); 
@@ -757,12 +741,19 @@ at (0,0,0)
 */
 
 ////energy calculations
-        FunctionTree<3> *temp = add(1.0, *rho_eff, -1.0, *rho_r);
-        FunctionTree<3> *gamma_rho_rho = add(1.0, *temp, 1.0, *gamma);
-        FunctionTree<3> *U_r = G();
-        P(*U_r,*gamma_rho_rho); 
-        FunctionTree<3> *U_v = G();
-        P(*U_v,*rho_r);
+
+        FunctionTree<3> *temp = new FunctionTree<3>(*MRA);
+        add(*temp, 1.0, *rho_eff, -1.0, *rho_r);
+
+        FunctionTree<3> *gamma_rho_rho = new FunctionTree<3>(*MRA);
+        add(*gamma_rho_rho, 1.0, *temp, 1.0, *gamma);
+
+        FunctionTree<3> *U_r = new FunctionTree<3>(*MRA);
+        apply_conv(*U_r, P , *gamma_rho_rho);
+
+        FunctionTree<3> *U_v = new FunctionTree<3>(*MRA);
+        apply_conv(*U_v, P, *rho_r);
+
         double E_r1 = U_r->dot(*rho_r); 
         double E_r2 = U_v->dot(*gamma_rho_rho); 
     
@@ -816,20 +807,22 @@ at (0,0,0)
 
     
     
-    FunctionTree<3> *one_div_eps_mult_r = mult(1.0,	*one_over_rad, *eps_r_inv);	
+    FunctionTree<3> *one_div_eps_mult_r = new FunctionTree<3>(*MRA);
+    mult(*one_div_eps_mult_r, 1.0,*one_over_rad, *eps_r_inv);	
     plt.surfPlot(*one_div_eps_mult_r, "one_div_eps_mult_r");
 
 
 
 	
     FunctionTreeVector<3> inp_vec2;
-    inp_vec2.push_back(1.0,U);
+    inp_vec2.push_back(1.0, U);
     inp_vec2.push_back(1.0, eps_r);
     inp_vec2.push_back(1.0, rad);
 
 
-    FunctionTree<3> *ureps = mult(inp_vec2);
-    plt.surfPlot(*ureps,"ureps");
+    FunctionTree<3> *u_r_eps = new FunctionTree<3>(*MRA);
+    mult(*u_r_eps, inp_vec2);
+    plt.surfPlot(*u_r_eps,"u_r_eps");
     plt.surfPlot(*rad,"rad");
     plt.surfPlot(*eps_r,"eps_r");
 	

@@ -6,12 +6,14 @@
 
 class CavityFunction : public RepresentableFunction<3> {
 public:
-    CavityFunction(const Nuclei &nucs, double s, bool i = false)
-        : slope(s), nuclei(nucs), inverse(i) { }
+    CavityFunction(const Nuclei &nucs, double s, bool i = false, double eps_0 = 1.0, double eps_inf=10.0)
+        : slope(s), nuclei(nucs), inverse(i), epsilon_0(eps_0), epsilon_inf(eps_inf) { }
     virtual ~CavityFunction() { }
 
-    double epsilon_0 = 1.0;//inside cavity
-    double epsilon_inf = 10.0;//outside cavity
+    double epsilon_0;//inside cavity
+    double epsilon_inf;//outside cavity
+
+
 
     double evalf(const double *r) const {
 
@@ -45,6 +47,7 @@ protected:
     double slope;
     Nuclei nuclei;
     bool inverse;
+    
 };
 
 #endif // CAVITYFUNCTION_H
