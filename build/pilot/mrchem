@@ -274,6 +274,7 @@ def setup_keywords():
     pilot.add_kw('run_scf',             'BOOL', False)
     pilot.add_kw('run_molecule',        'BOOL', False)
     pilot.add_kw('run_cavity',          'BOOL', False)
+    pilot.add_kw('run_scfcavity',       'BOOL', False)
     top.add_sect(pilot)
 
     return top
