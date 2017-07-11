@@ -49,6 +49,7 @@ void testDerivative();
 void testPoisson();
 void testSCF();
 void testCavity();
+void testSCFCavity();
 //void testTreeCleaner();
 
 Getkw Input;
@@ -67,7 +68,9 @@ int main(int argc, char **argv) {
     bool run_poisson = Input.get<bool>("Pilot.run_poisson");
     bool run_scf = Input.get<bool>("Pilot.run_scf");
     bool run_cavity = Input.get<bool>("Pilot.run_cavity");
-
+    bool run_scfcavity = Input.get<bool>("Pilot.run_scfcavity");
+        
+    
     if (run_projection) testProjection();
     if (run_addition) testAddition();
     if (run_multiplication) testMultiplication();
@@ -75,6 +78,7 @@ int main(int argc, char **argv) {
     if (run_poisson) testPoisson();
     if (run_scf) testSCF();
     if (run_cavity) testCavity();
+    if (run_scfcavity) testSCFCavity();
     
     timer.stop();
     MREnv::finalizeMRCPP(timer);
@@ -396,7 +400,7 @@ void testSCF() {
         TelePrompter::printFooter(0, timer, 2);
         TelePrompter::setPrintLevel(oldlevel);
     }
-
+    
     // Wave function
     FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
     FunctionTree<3> *phi_np1 = 0;
@@ -484,7 +488,12 @@ void testSCF() {
         epsilon_n = epsilon_np1;
         phi_n = phi_np1;
         phi_n->normalize();
-
+    
+        double a[3] = { -4.0, -4.0, 0.0};
+        double b[3] = { 4.0, 4.0, 0.0};
+        Plot<3> plt(10000, a, b);
+        plt.surfPlot(*phi_n, "phi_n");
+     
         cycle_t.stop();
         scf_t.push_back(cycle_t);
         iter++;
@@ -505,6 +514,218 @@ void testSCF() {
 
     delete phi_n;
 }
+
+void testSCFCavity(){
+    //Plotting parameters for surfPlot
+    double a[3] = { -4.0, -4.0, 0.0};
+    double b[3] = { 4.0, 4.0, 0.0};
+    Plot<3> plt(10000, a, b);
+        
+    // Precision parameters
+    int max_scale = MRA->getMaxScale();
+    double prec = Input.get<double>("rel_prec");
+
+    // Initializing projector
+    GridGenerator<3> grid(max_scale);
+    MWProjector<3> project(prec, max_scale);
+
+    // Nuclear parameters
+    double Z = 1.0;                     // Nuclear charge
+    double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
+
+    // Orbtial energies
+    double energy_n = -0.5;
+    double energy_np1 = 0.0;
+    double d_energy_n = 0.0;
+
+    // Nuclear potential
+    FunctionTree<3> V(*MRA);
+    {
+        Timer timer;
+        int oldlevel = TelePrompter::setPrintLevel(10);
+        TelePrompter::printHeader(0, "Projecting nuclear potential");
+
+        double c = 0.00435*prec/pow(Z, 5);  // Smoothing parameter
+        auto u = [] (double r) -> double {
+            return erf(r)/r + 1.0/(3.0*sqrt(pi))*(exp(-r*r) + 16.0*exp(-4.0*r*r));
+        };
+        auto f = [u, c, Z, R] (const double *r) -> double {
+            double x = MathUtils::calcDistance(3, r, R);
+            return -1.0*Z*u(x/c)/c;
+        };
+
+        project(V, f);
+        timer.stop();
+        TelePrompter::printFooter(0, timer, 2);
+        TelePrompter::setPrintLevel(oldlevel);
+    }
+    
+    // Wave function
+    FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *phi_np1 = 0;
+    {
+        Timer timer;
+        int oldlevel = TelePrompter::setPrintLevel(10);
+        TelePrompter::printHeader(0, "Projecting initial guess");
+
+        auto f = [R] (const double *r) -> double {
+            double x = MathUtils::calcDistance(3, r, R);
+            return 1.0*exp(-1.0*x*x);
+        };
+
+        project(*phi_n, f);
+        phi_n->normalize();
+        timer.stop();
+        TelePrompter::printFooter(0, timer, 2);
+        TelePrompter::setPrintLevel(oldlevel);
+    }
+
+    TelePrompter::printHeader(0, "Running SCF");
+    printout(0, " Iter");
+    printout(0, "      E_np1          dE_n   ");
+    printout(0, "   ||phi_np1||   ||dPhi_n||" << endl);
+    TelePrompter::printSeparator(0, '-');
+
+    double scf_prec = 1.0e-3;
+    double scf_thrs = prec*10.0;
+    
+    //making cavity
+    Nuclei &nucs = mol.getNuclei();
+    double slope = 0.2;//slope of cavity, lower double --> steeper slope.
+    double eps_0 = 1.0;
+    double eps_inf = 10.0;
+
+    CavityFunction cavity(nucs,slope,false, eps_0, eps_inf);
+    FunctionTree<3> *eps_r = new FunctionTree<3>(*MRA);//
+    project(*eps_r, cavity);//
+
+	//cavity invers
+    CavityFunction cavity_inv(nucs,slope,true, eps_0, eps_inf);
+    FunctionTree<3> *eps_r_inv = new FunctionTree<3>(*MRA);//
+    project(*eps_r_inv, cavity_inv);//
+
+    int iter = 1;
+    double error = 1.0;
+    vector<Timer> scf_t;
+    while (error > scf_thrs) {
+        Timer cycle_t;
+
+        // Adjust precision
+        scf_prec = min(scf_prec, error/100.0);
+        scf_prec = max(scf_prec, prec);
+        
+        // Initialize Poisson operator
+        PoissonOperator P(*MRA, scf_prec);
+
+        // Initialize Helmholtz operator
+        if (energy_n > 0.0) energy_n *= -1.0;
+        double mu_n = sqrt(-2.0*energy_n);
+        HelmholtzOperator H(*MRA, mu_n, scf_prec);
+
+        // Initialize arithmetic operators
+        MWAdder<3> add(scf_prec, max_scale);
+        MWMultiplier<3> mult(scf_prec, max_scale);
+        MWConvolution<3> apply(scf_prec, max_scale);
+
+        // Compute Helmholtz argument V*phi
+        FunctionTree<3> Vphi(*MRA);
+        grid(Vphi, *phi_n);  // Copy grid from orbital
+        mult(Vphi, 1.0, V, *phi_n, 1);    // Relax grid max one level
+
+        // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
+        phi_np1 = new FunctionTree<3>(*MRA);
+        apply(*phi_np1, H, Vphi);
+        *phi_np1 *= -1.0/(2.0*pi);
+
+        // Compute orbital residual
+        FunctionTree<3> d_phi_n(*MRA);
+        grid(d_phi_n, *phi_np1);                      // Copy grid from phi_np1
+        add(d_phi_n, 1.0, *phi_np1, -1.0, *phi_n); // No grid relaxation
+        error = sqrt(d_phi_n.getSquareNorm());
+
+        // Compute energy update
+        d_energy_n = Vphi.dot(d_phi_n)/phi_np1->getSquareNorm();
+        energy_np1 = energy_n + d_energy_n;
+
+        printout(0, setw(3) << iter);
+        TelePrompter::setPrecision(10);
+        printout(0, setw(19) << energy_np1);
+        TelePrompter::setPrecision(1);
+        printout(0, setw(9) << d_energy_n);
+        TelePrompter::setPrecision(10);
+        printout(0, setw(19) << phi_np1->getSquareNorm());
+        TelePrompter::setPrecision(1);
+        printout(0, setw(9) << error);
+        TelePrompter::setPrecision(15);
+        printout(0, endl);
+
+        delete phi_n;
+
+        // Prepare for next iteration
+        energy_n = energy_np1;
+        phi_n = phi_np1;
+        phi_n->normalize();
+       
+
+        // Solvent effect on V 
+        
+        FunctionTree<3> *rho = new FunctionTree<3>(*MRA);
+        mult(*rho, 1, *phi_n, *phi_n);
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        cycle_t.stop();
+        scf_t.push_back(cycle_t);
+        iter++;
+        
+        //Plotting
+        plt.surfPlot(*rho, "rho");
+        plt.surfPlot(*phi_n, "phi_n");
+
+    }
+    
+
+    
+    
+    
+    
+    
+    TelePrompter::printSeparator(0, '=', 2);
+
+    TelePrompter::printHeader(0, "SCF timings");
+    for (int i = 0; i < scf_t.size(); i++) {
+        println(0, " Time cycle " << setw(5) << i+1 << "  " << scf_t[i]);
+    }
+    TelePrompter::printSeparator(0, '=', 2);
+
+
+    TelePrompter::setPrecision(15);
+    TelePrompter::printHeader(0, "Final energy");
+    println(0, " Orbital energy    " << setw(40) << energy_n);
+    TelePrompter::printSeparator(0, '=', 2);
+
+    delete phi_n;
+
+
+
+}
+
 
 
 void testCavity() {
@@ -585,17 +806,24 @@ Testing the Cavity class,(cavityFunction.h) and calculating the potential U
     //making electron  density function
 /*
 should come from a HF calculation of.
-Now it is a single Gaussian located with peek
-at (0,0,0)
+Now it is a single Gaussian located with peeks
+at (0,0,0) and (1,0,0), center of H atom from input file
 */ 
 	//TODO should be from DFT calculations!		
     double alpha = 50.0;
     double c = pow(alpha/pi,3.0/2.0);
-    double pos[3] = {0, 0, 0};
+    double pos1[3] = {0, 0, 0};
+    double pos2[3] = {1, 0, 0};
     int pov[3] = {0, 0, 0};
-    GaussFunc<3> rho_r_analytic(alpha, c , pos, pov);
+    GaussFunc<3> rho_r_analytic1(alpha, c , pos1, pov);
+    GaussFunc<3> rho_r_analytic2(alpha, c , pos2, pov);
+    
+    FunctionTree<3> *rho_r1 = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *rho_r2 = new FunctionTree<3>(*MRA);
+    project(*rho_r1, rho_r_analytic1);
+    project(*rho_r2, rho_r_analytic2);
     FunctionTree<3> *rho_r = new FunctionTree<3>(*MRA);
-    project(*rho_r, rho_r_analytic);
+    add(*rho_r, 1.0, *rho_r1, 1.0, *rho_r2);
 
     //derivation of dielectric function eps_r	
     FunctionTree<3> *dx_eps_r = new FunctionTree<3>(*MRA);//
@@ -613,13 +841,14 @@ at (0,0,0)
     eps_r_derivative.push_back(dy_eps_r);
     eps_r_derivative.push_back(dz_eps_r);
 
-//making initial guess -rho/epsilon
+    //making initial guess -rho/epsilon
 
     FunctionTree<3> *rho_eff = new FunctionTree<3>(*MRA);
     FunctionTreeVector<3> mult_initial_vec;
-    mult_initial_vec.push_back(1, &*eps_r_inv);
-    mult_initial_vec.push_back(1, &*rho_r);
-    mult(*rho_eff, mult_initial_vec);
+    //mult_initial_vec.push_back(1, &*eps_r_inv);
+    //mult_initial_vec.push_back(1, &*rho_r);
+    mult(*rho_eff, 1.0, *eps_r_inv, *rho_r);
+    //mult(*rho_eff, mult_initial_vec);
     //FunctionTree<3> *rho_eff= mult(1, *eps_r_inv, *rho_r);
 
     plt.surfPlot(*rho_eff, "initial");
@@ -648,7 +877,7 @@ at (0,0,0)
         grid(*dz_U,*U);       
 
 
-//doing the derivation
+        //doing the derivation
         applyDerivative(*dx_U, D, *U, 0);
         applyDerivative(*dy_U, D, *U, 1);
         applyDerivative(*dz_U, D, *U, 2);
