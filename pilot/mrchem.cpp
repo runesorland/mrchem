@@ -532,12 +532,18 @@ void testSCFCavity(){
     // Nuclear parameters
     double Z = 1.0;                     // Nuclear charge
     double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
+  
+    //Importing molecular information.
+    std::vector<std::string> mol_coords = Input.getData("Molecule.coords");
+    Molecule mol(mol_coords);
+    mol.printGeometry();
 
     // Orbtial energies
     double energy_n = -0.5;
     double energy_np1 = 0.0;
     double d_energy_n = 0.0;
 
+    /*
     // Nuclear potential
     FunctionTree<3> V(*MRA);
     {
@@ -559,6 +565,7 @@ void testSCFCavity(){
         TelePrompter::printFooter(0, timer, 2);
         TelePrompter::setPrintLevel(oldlevel);
     }
+    */
     
     // Wave function
     FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
@@ -579,7 +586,68 @@ void testSCFCavity(){
         TelePrompter::printFooter(0, timer, 2);
         TelePrompter::setPrintLevel(oldlevel);
     }
+    
 
+    //making cavity
+    FunctionTree<3> eps(*MRA);
+    FunctionTree<3> eps_inv(*MRA);
+    {
+        Timer timer;
+        int oldlevel = TelePrompter::setPrintLevel(10);
+        TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
+
+        Nuclei &nucs = mol.getNuclei();
+        double slope = 0.2;//slope of cavity, lower double --> steeper slope.
+        double eps_0 = 1.0;
+        double eps_inf = 10.0;
+
+        CavityFunction cavity(nucs, slope, false, eps_0, eps_inf);
+        project(eps, cavity);
+
+        //cavity invers
+        CavityFunction cavity_inv(nucs, slope, true, eps_0, eps_inf);
+        project(eps_inv, cavity_inv);
+
+        timer.stop();
+        TelePrompter::printFooter(0, timer, 2);
+        TelePrompter::setPrintLevel(oldlevel);
+    
+        
+    
+    }
+    
+       //initial potential
+    FunctionTree<3> *V_n = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *V_np1 = 0;
+    FunctionTree<3> *rho_n = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *rho_np1 = 0;
+    {
+       
+        MWMultiplier<3> mult_temp(prec, max_scale);
+           
+           
+        Timer timer;
+        int oldlevel = TelePrompter::setPrintLevel(10);
+        TelePrompter::printHeader(0, "Projecting initial nuclear potential");
+
+        auto u = [R] (const double *r) -> double {
+            double x = MathUtils::calcDistance(3, r, R);
+            return exp(-2.0*x*x);
+        };
+        
+        
+
+        
+        project(*rho_n, u);
+        
+        mult_temp(*V_n, 1.0, *rho_n, eps_inv);
+        
+        timer.stop();
+        TelePrompter::printFooter(0, timer, 2);
+        TelePrompter::setPrintLevel(oldlevel);
+    }
+
+    
     TelePrompter::printHeader(0, "Running SCF");
     printout(0, " Iter");
     printout(0, "      E_np1          dE_n   ");
@@ -589,20 +657,7 @@ void testSCFCavity(){
     double scf_prec = 1.0e-3;
     double scf_thrs = prec*10.0;
     
-    //making cavity
-    Nuclei &nucs = mol.getNuclei();
-    double slope = 0.2;//slope of cavity, lower double --> steeper slope.
-    double eps_0 = 1.0;
-    double eps_inf = 10.0;
 
-    CavityFunction cavity(nucs,slope,false, eps_0, eps_inf);
-    FunctionTree<3> *eps_r = new FunctionTree<3>(*MRA);//
-    project(*eps_r, cavity);//
-
-	//cavity invers
-    CavityFunction cavity_inv(nucs,slope,true, eps_0, eps_inf);
-    FunctionTree<3> *eps_r_inv = new FunctionTree<3>(*MRA);//
-    project(*eps_r_inv, cavity_inv);//
 
     int iter = 1;
     double error = 1.0;
@@ -626,11 +681,95 @@ void testSCFCavity(){
         MWAdder<3> add(scf_prec, max_scale);
         MWMultiplier<3> mult(scf_prec, max_scale);
         MWConvolution<3> apply(scf_prec, max_scale);
+        MWConvolution<3> apply_conv(prec, MRA->getMaxScale());//TODO remove when done error searching
 
+        //initializing derivative operator
+        double boundary1 = 0.0, boundary2 = 0.0;
+        ABGVOperator<3> D(*MRA, boundary1, boundary2);
+        MWDerivative<3> applyDerivative(max_scale); 
+        
+        //derivative of cavity function TODO outside!
+        FunctionTree<3> *dx_eps = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dy_eps = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dz_eps = new FunctionTree<3>(*MRA);
+       
+        applyDerivative(*dx_eps, D, eps, 0);
+        applyDerivative(*dy_eps, D, eps, 1);
+        applyDerivative(*dz_eps, D, eps, 2);
+    
+       // FunctionTreeVector<3> d_eps_vec;
+       // d_eps_vec.push_back(dx_eps);        
+       // d_eps_vec.push_back(dy_eps);        
+       // d_eps_vec.push_back(dz_eps);        
+        
+        
+        //derivative of electrostatic potential
+        FunctionTree<3> *dx_V_n = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dy_V_n = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dz_V_n = new FunctionTree<3>(*MRA);
+        
+          
+        applyDerivative(*dx_V_n, D, *V_n, 0);
+        applyDerivative(*dy_V_n, D, *V_n, 1);
+        applyDerivative(*dz_V_n, D, *V_n, 2);
+    
+       // FunctionTreeVector<3> d_V_n_vec;
+       // d_V_n_vec.push_back(dx_V_n);        
+       // d_V_n_vec.push_back(dy_V_n);        
+       // d_V_n_vec.push_back(dz_V_n);        
+        
+
+        //creating rho_eff (rho/eps)
+        FunctionTree<3> *rho = new FunctionTree<3>(*MRA);
+        mult(*rho, 1.0, *phi_n, *phi_n);
+        
+        FunctionTree<3> *rho_eff = new FunctionTree<3>(*MRA);
+        mult(*rho_eff, 1.0, *rho, eps_inv);
+       
+
+
+
+        //creating gamma (grad_eps*grad_V)/4pi*eps)
+        FunctionTreeVector<3> gradeps_gradV;
+        FunctionTree<3> *dx_eps_dx_V_n = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dy_eps_dy_V_n = new FunctionTree<3>(*MRA);
+        FunctionTree<3> *dz_eps_dz_V_n = new FunctionTree<3>(*MRA);
+        
+        mult(*dx_eps_dx_V_n, 1.0, *dx_eps, *dx_V_n);
+        mult(*dy_eps_dy_V_n, 1.0, *dy_eps, *dy_V_n);
+        mult(*dz_eps_dz_V_n, 1.0, *dz_eps, *dz_V_n);
+        
+        gradeps_gradV.push_back(1.0, dx_eps_dx_V_n);
+        gradeps_gradV.push_back(1.0, dy_eps_dy_V_n);
+        gradeps_gradV.push_back(1.0, dz_eps_dz_V_n);
+        
+        FunctionTree<3> *temp_func = new FunctionTree<3>(*MRA);
+        add(*temp_func, gradeps_gradV);
+        *temp_func *= 1.0/(4.0*pi);  
+        
+        FunctionTree<3> *gamma = new FunctionTree<3>(*MRA);
+        mult(*gamma, 1.0, *temp_func, eps_inv);
+
+        
+        FunctionTree<3> *sum_rhoeff_gamma = new FunctionTree<3>(*MRA);
+        add(*sum_rhoeff_gamma, 1.0, *rho_eff, 1.0, *gamma);
+
+        
+        //applying greensfunction
+        apply_conv(*V_np1, P, *sum_rhoeff_gamma);//TODO problem!!,,SCF is crashing!!
+
+        delete V_n;
+
+        V_n = V_np1;
+
+        
+
+
+        
         // Compute Helmholtz argument V*phi
         FunctionTree<3> Vphi(*MRA);
         grid(Vphi, *phi_n);  // Copy grid from orbital
-        mult(Vphi, 1.0, V, *phi_n, 1);    // Relax grid max one level
+        mult(Vphi, 1.0, *V_n, *phi_n, 1);    // Relax grid max one level TODO V_n, U ellar V??
 
         // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
         phi_np1 = new FunctionTree<3>(*MRA);
@@ -669,8 +808,6 @@ void testSCFCavity(){
 
         // Solvent effect on V 
         
-        FunctionTree<3> *rho = new FunctionTree<3>(*MRA);
-        mult(*rho, 1, *phi_n, *phi_n);
         
 
 
@@ -687,17 +824,16 @@ void testSCFCavity(){
 
 
 
-
-
+        error = 0;
 
         cycle_t.stop();
         scf_t.push_back(cycle_t);
         iter++;
         
         //Plotting
-        plt.surfPlot(*rho, "rho");
-        plt.surfPlot(*phi_n, "phi_n");
-
+  //      plt.surfPlot(*rho_np1, "rho");
+  //      plt.surfPlot(*phi_np1, "phi_n");
+  //      plt.surfPlot(*gamma, "gamma");
     }
     
 
