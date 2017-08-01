@@ -543,30 +543,7 @@ void testSCFCavity(){
     double energy_np1 = 0.0;
     double d_energy_n = 0.0;
 
-    /*
-    // Nuclear potential
-    FunctionTree<3> V(*MRA);
-    {
-        Timer timer;
-        int oldlevel = TelePrompter::setPrintLevel(10);
-        TelePrompter::printHeader(0, "Projecting nuclear potential");
-
-        double c = 0.00435*prec/pow(Z, 5);  // Smoothing parameter
-        auto u = [] (double r) -> double {
-            return erf(r)/r + 1.0/(3.0*sqrt(pi))*(exp(-r*r) + 16.0*exp(-4.0*r*r));
-        };
-        auto f = [u, c, Z, R] (const double *r) -> double {
-            double x = MathUtils::calcDistance(3, r, R);
-            return -1.0*Z*u(x/c)/c;
-        };
-
-        project(V, f);
-        timer.stop();
-        TelePrompter::printFooter(0, timer, 2);
-        TelePrompter::setPrintLevel(oldlevel);
-    }
-    */
-    
+   
     // Wave function
     FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
     FunctionTree<3> *phi_np1 = 0;
@@ -616,9 +593,9 @@ void testSCFCavity(){
     
     }
     
-       //initial potential
+    //initial potential
     FunctionTree<3> *V_n = new FunctionTree<3>(*MRA);
-    FunctionTree<3> *V_np1 = 0;
+   // FunctionTree<3> *V_np1 = 0;
     FunctionTree<3> *rho_n = new FunctionTree<3>(*MRA);
     FunctionTree<3> *rho_np1 = 0;
     {
@@ -653,10 +630,23 @@ void testSCFCavity(){
     printout(0, "      E_np1          dE_n   ");
     printout(0, "   ||phi_np1||   ||dPhi_n||" << endl);
     TelePrompter::printSeparator(0, '-');
+        
+    //initializing derivative operator
+    double boundary1 = 0.0, boundary2 = 0.0;
+    ABGVOperator<3> D(*MRA, boundary1, boundary2);
+    MWDerivative<3> applyDerivative(max_scale); 
+ 
+    //derivative of cavity 
+    FunctionTree<3> *dx_eps = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *dy_eps = new FunctionTree<3>(*MRA);
+    FunctionTree<3> *dz_eps = new FunctionTree<3>(*MRA);
+    
+    applyDerivative(*dx_eps, D, eps, 0);
+    applyDerivative(*dy_eps, D, eps, 1);
+    applyDerivative(*dz_eps, D, eps, 2);
 
     double scf_prec = 1.0e-3;
     double scf_thrs = prec*10.0;
-    
 
 
     int iter = 1;
@@ -682,26 +672,7 @@ void testSCFCavity(){
         MWMultiplier<3> mult(scf_prec, max_scale);
         MWConvolution<3> apply(scf_prec, max_scale);
         MWConvolution<3> apply_conv(prec, MRA->getMaxScale());//TODO remove when done error searching
-
-        //initializing derivative operator
-        double boundary1 = 0.0, boundary2 = 0.0;
-        ABGVOperator<3> D(*MRA, boundary1, boundary2);
-        MWDerivative<3> applyDerivative(max_scale); 
-        
-        //derivative of cavity function TODO outside!
-        FunctionTree<3> *dx_eps = new FunctionTree<3>(*MRA);
-        FunctionTree<3> *dy_eps = new FunctionTree<3>(*MRA);
-        FunctionTree<3> *dz_eps = new FunctionTree<3>(*MRA);
-       
-        applyDerivative(*dx_eps, D, eps, 0);
-        applyDerivative(*dy_eps, D, eps, 1);
-        applyDerivative(*dz_eps, D, eps, 2);
-    
-       // FunctionTreeVector<3> d_eps_vec;
-       // d_eps_vec.push_back(dx_eps);        
-       // d_eps_vec.push_back(dy_eps);        
-       // d_eps_vec.push_back(dz_eps);        
-        
+            
         
         //derivative of electrostatic potential
         FunctionTree<3> *dx_V_n = new FunctionTree<3>(*MRA);
@@ -713,12 +684,7 @@ void testSCFCavity(){
         applyDerivative(*dy_V_n, D, *V_n, 1);
         applyDerivative(*dz_V_n, D, *V_n, 2);
     
-       // FunctionTreeVector<3> d_V_n_vec;
-       // d_V_n_vec.push_back(dx_V_n);        
-       // d_V_n_vec.push_back(dy_V_n);        
-       // d_V_n_vec.push_back(dz_V_n);        
         
-
         //creating rho_eff (rho/eps)
         FunctionTree<3> *rho = new FunctionTree<3>(*MRA);
         mult(*rho, 1.0, *phi_n, *phi_n);
@@ -726,8 +692,6 @@ void testSCFCavity(){
         FunctionTree<3> *rho_eff = new FunctionTree<3>(*MRA);
         mult(*rho_eff, 1.0, *rho, eps_inv);
        
-
-
 
         //creating gamma (grad_eps*grad_V)/4pi*eps)
         FunctionTreeVector<3> gradeps_gradV;
@@ -750,27 +714,29 @@ void testSCFCavity(){
         FunctionTree<3> *gamma = new FunctionTree<3>(*MRA);
         mult(*gamma, 1.0, *temp_func, eps_inv);
 
+        plt.surfPlot(*gamma, "gamma");
         
         FunctionTree<3> *sum_rhoeff_gamma = new FunctionTree<3>(*MRA);
         add(*sum_rhoeff_gamma, 1.0, *rho_eff, 1.0, *gamma);
 
-        
+
+
+        plt.surfPlot(*sum_rhoeff_gamma, "sum_rhoeff_gamma");
+               
         //applying greensfunction
-        apply_conv(*V_np1, P, *sum_rhoeff_gamma);//TODO problem!!,,SCF is crashing!!
-
+        FunctionTree<3> *V_np1 = new FunctionTree<3>(*MRA);
+        apply_conv(*V_np1, P, *sum_rhoeff_gamma);
+        plt.surfPlot(*V_np1, "V_np1");
+        
+        
         delete V_n;
-
         V_n = V_np1;
 
-        
-
-
-        
         // Compute Helmholtz argument V*phi
         FunctionTree<3> Vphi(*MRA);
         grid(Vphi, *phi_n);  // Copy grid from orbital
-        mult(Vphi, 1.0, *V_n, *phi_n, 1);    // Relax grid max one level TODO V_n, U ellar V??
-
+        mult(Vphi, 1.0, *V_n, *phi_n, 1);   
+        
         // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
         phi_np1 = new FunctionTree<3>(*MRA);
         apply(*phi_np1, H, Vphi);
@@ -806,41 +772,14 @@ void testSCFCavity(){
         phi_n->normalize();
        
 
-        // Solvent effect on V 
         
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        error = 0;
-
         cycle_t.stop();
         scf_t.push_back(cycle_t);
         iter++;
         
-        //Plotting
-  //      plt.surfPlot(*rho_np1, "rho");
-  //      plt.surfPlot(*phi_np1, "phi_n");
-  //      plt.surfPlot(*gamma, "gamma");
     }
     
 
-    
-    
-    
-    
     
     TelePrompter::printSeparator(0, '=', 2);
 
