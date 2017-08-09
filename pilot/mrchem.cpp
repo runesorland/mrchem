@@ -20,7 +20,7 @@
 #include "TelePrompter.h"
 #include "MathUtils.h"
 #include "Plot.h"
-#include "Molecule.h"//rune added 28.6.17
+#include "Molecule.h"
 
 #include "FunctionTree.h"
 #include "ABGVOperator.h"
@@ -515,6 +515,51 @@ void testSCF() {
     delete phi_n;
 }
 
+
+
+
+
+
+FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
+
+    Timer timer;
+    int oldlevel = TelePrompter::setPrintLevel(10);
+    TelePrompter::printHeader(0, "Projecting nuclear potential");
+   
+    FunctionTree<3> *V_nuc = new FunctionTree<3>(*MRA);
+    
+            
+    auto u = [] (double r) -> double {
+        return erf(r)/r + 1.0/(3.0*sqrt(pi))*(exp(-r*r) + 16.0*exp(-4.0*r*r));
+    };
+   
+
+    auto func = [u, prec, nucs] (const double* r) -> double{
+        double func_val = 0.0;  
+        for (int i = 0; i < nucs.size(); i++){
+            double c = 0.0435*prec/pow(nucs[i].getCharge(),5);
+            double x = MathUtils::calcDistance(3, r, nucs[i].getCoord());
+            func_val += -1.0*nucs[i].getCharge()*u(x/c)/c;
+        }
+        return func_val;
+    };  
+   
+
+    int max_scale = MRA->getMaxScale();
+    MWProjector<3> project(prec, max_scale);
+    project(*V_nuc, func);
+    timer.stop();
+
+    TelePrompter::printFooter(0, timer, 2);
+    TelePrompter::setPrintLevel(oldlevel);
+
+    return V_nuc;
+}
+
+
+
+
+
 void testSCFCavity(){
     //Plotting parameters for surfPlot
     double a[3] = { -4.0, -4.0, 0.0};
@@ -564,8 +609,13 @@ void testSCFCavity(){
         TelePrompter::setPrintLevel(oldlevel);
     }
     
-
-    //making cavity
+    
+    Nuclei &nucs = mol.getNuclei();
+    
+    //nuclear potential
+    FunctionTree<3> *V_nuc = nuclearPotential(prec, nucs);
+       
+    //cavity
     FunctionTree<3> eps(*MRA);
     FunctionTree<3> eps_inv(*MRA);
     {
@@ -573,7 +623,6 @@ void testSCFCavity(){
         int oldlevel = TelePrompter::setPrintLevel(10);
         TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
 
-        Nuclei &nucs = mol.getNuclei();
         double slope = 0.2;//slope of cavity, lower double --> steeper slope.
         double eps_0 = 1.0;
         double eps_inf = 10.0;
@@ -590,38 +639,9 @@ void testSCFCavity(){
         TelePrompter::setPrintLevel(oldlevel);
     
     }
-    
-    //initial potential
-    FunctionTree<3> V_nuc(*MRA);
-    {
-        Timer timer;
-        int oldlevel = TelePrompter::setPrintLevel(10);
-        TelePrompter::printHeader(0, "Projecting nuclear potential");
-
-        double c = 0.00435*prec/pow(Z, 5);  // Smoothing parameter
-        auto u = [] (double r) -> double {
-            return erf(r)/r + 1.0/(3.0*sqrt(pi))*(exp(-r*r) + 16.0*exp(-4.0*r*r));
-        };
-        auto f = [u, c, Z, R] (const double *r) -> double {
-            double x = MathUtils::calcDistance(3, r, R);
-            return -1.0*Z*u(x/c)/c;
-        };
-
-        project(V_nuc, f);
-        timer.stop();
-        TelePrompter::printFooter(0, timer, 2);
-        TelePrompter::setPrintLevel(oldlevel);
-    }
- 
 
 
-
-    TelePrompter::printHeader(0, "Running SCF");
-    printout(0, " Iter");
-    printout(0, "      E_np1          dE_n   ");
-    printout(0, "   ||phi_np1||   ||dPhi_n||" << endl);
-    TelePrompter::printSeparator(0, '-');
-        
+       
     //initializing operator
 
     double scf_prec = prec;
@@ -651,25 +671,17 @@ void testSCFCavity(){
 
     FunctionTree<3> *V = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_n = new FunctionTree<3>(*MRA);
+    V_el_n->setZero();
     FunctionTree<3> *V_el_np1 = 0;
-    {
-        Timer timer;
-        int oldlevel = TelePrompter::setPrintLevel(10);
-        TelePrompter::printHeader(0, "Projecting initial guess, electron potential");
-
-        auto f = [R] (const double *r) -> double {
-            //double x = MathUtils::calcDistance(3, r, R);
-            return 0.0;
-        };
-
-        project(*V_el_n, f);
-        phi_n->normalize();
-        timer.stop();
-        TelePrompter::printFooter(0, timer, 2);
-        TelePrompter::setPrintLevel(oldlevel);
-    }
-
-
+    
+    
+    
+    TelePrompter::printHeader(0, "Running SCF");
+    printout(0, " Iter");
+    printout(0, "      E_np1          dE_n   ");
+    printout(0, "   ||phi_np1||   ||dPhi_n||" << endl);
+    TelePrompter::printSeparator(0, '-');
+    
 
 
     int cycle = 0; 
@@ -680,7 +692,6 @@ void testSCFCavity(){
     while (errorPhi > scf_prec) {
         Timer cycle_t;    
         if (errorPhi < scf_prec*10){
-    
             while (errorV > scf_prec){
             
                 //derivative of electrostatic potential
@@ -756,7 +767,8 @@ void testSCFCavity(){
 
             }
         }
-        add(*V, 1.0, *V_el_n, 1.0, V_nuc);
+        
+        add(*V, 1.0, *V_el_n, 1.0, *V_nuc);
 
 
         // Helmholtz operator
@@ -780,10 +792,10 @@ void testSCFCavity(){
         FunctionTree<3> d_phi_n(*MRA);
         grid(d_phi_n, *phi_np1);                      // Copy grid from phi_np1
         add(d_phi_n, 1.0, *phi_np1, -1.0, *phi_n); // No grid relaxation
-        if (errorPhi = sqrt(d_phi_n.getSquareNorm()));
-            {
-                errorV = 1;
-            }
+        
+        errorPhi = sqrt(d_phi_n.getSquareNorm());
+        errorV = 1;
+        
         // Compute energy update
         d_energy_n = Vphi.dot(d_phi_n)/phi_np1->getSquareNorm();
         energy_np1 = energy_n + d_energy_n;
