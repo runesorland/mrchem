@@ -550,7 +550,7 @@ void testSCFCavity(){
     {
         Timer timer;
         int oldlevel = TelePrompter::setPrintLevel(10);
-        TelePrompter::printHeader(0, "Projecting initial guess");
+        TelePrompter::printHeader(0, "Projecting initial guess, phi");
 
         auto f = [R] (const double *r) -> double {
             double x = MathUtils::calcDistance(3, r, R);
@@ -649,90 +649,113 @@ void testSCFCavity(){
     applyDerivative(dz_eps, D, eps, 2);
 
 
+    FunctionTree<3> *V = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_n = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_np1 = 0;
-    FunctionTree<3> *V = new FunctionTree<3>(*MRA);
-    
-    
+    {
+        Timer timer;
+        int oldlevel = TelePrompter::setPrintLevel(10);
+        TelePrompter::printHeader(0, "Projecting initial guess, electron potential");
+
+        auto f = [R] (const double *r) -> double {
+            //double x = MathUtils::calcDistance(3, r, R);
+            return 0.0;
+        };
+
+        project(*V_el_n, f);
+        phi_n->normalize();
+        timer.stop();
+        TelePrompter::printFooter(0, timer, 2);
+        TelePrompter::setPrintLevel(oldlevel);
+    }
+
+
+
+
+    int cycle = 0; 
     int iter = 1;
     double errorPhi = 1.0;
     double errorV = 1.0;
     vector<Timer> scf_t;
     while (errorPhi > scf_prec) {
         Timer cycle_t;    
-        while (errorV > scf_prec){
-        
-            //derivative of electrostatic potential
-            FunctionTree<3> dx_V_el(*MRA);
-            FunctionTree<3> dy_V_el(*MRA);
-            FunctionTree<3> dz_V_el(*MRA);
-            
-              
-            applyDerivative(dx_V_el, D,*V_el_n, 0);
-            applyDerivative(dy_V_el, D,*V_el_n, 1);
-            applyDerivative(dz_V_el, D,*V_el_n, 2);
+        if (errorPhi < scf_prec*10){
     
+            while (errorV > scf_prec){
             
-            //creating rho_eff (rho/eps)
-            FunctionTree<3> rho(*MRA);
-            mult(rho, 1.0, *phi_n, *phi_n);
-            
-            FunctionTree<3> rho_eff(*MRA);
-            mult(rho_eff, 1.0, rho, eps_inv);
-           
+                //derivative of electrostatic potential
+                FunctionTree<3> dx_V_el(*MRA);
+                FunctionTree<3> dy_V_el(*MRA);
+                FunctionTree<3> dz_V_el(*MRA);
+                
+                  
+                applyDerivative(dx_V_el, D, *V_el_n, 0);
+                applyDerivative(dy_V_el, D, *V_el_n, 1);
+                applyDerivative(dz_V_el, D, *V_el_n, 2);
 
-            //creating gamma (grad_eps*grad_V)/4pi*eps)
-            FunctionTreeVector<3> gradeps_gradV;
-            FunctionTree<3> dx_eps_dx_V_el(*MRA);
-            FunctionTree<3> dy_eps_dy_V_el(*MRA);
-            FunctionTree<3> dz_eps_dz_V_el(*MRA);
-            
-            mult(dx_eps_dx_V_el, 1.0, dx_eps, dx_V_el);
-            mult(dy_eps_dy_V_el, 1.0, dy_eps, dy_V_el);
-            mult(dz_eps_dz_V_el, 1.0, dz_eps, dz_V_el);
-            
-            gradeps_gradV.push_back(1.0, &dx_eps_dx_V_el);
-            gradeps_gradV.push_back(1.0, &dy_eps_dy_V_el);
-            gradeps_gradV.push_back(1.0, &dz_eps_dz_V_el);
+                plt.surfPlot(dx_V_el, "dx_V_el"); 
+                plt.surfPlot(dy_V_el, "dy_V_el"); 
+                plt.surfPlot(dz_V_el, "dz_V_el"); 
+                
+                //creating rho_eff (rho/eps)
+                FunctionTree<3> rho(*MRA);
+                mult(rho, 1.0, *phi_n, *phi_n);
+                
+                FunctionTree<3> rho_eff(*MRA);
+                mult(rho_eff, 1.0, rho, eps_inv);
+               
 
-            FunctionTree<3> temp_func(*MRA);
-            add(temp_func, gradeps_gradV);
-            temp_func *= 1.0/(4.0*pi);  
-            gradeps_gradV.clear();
+                //creating gamma (grad_eps*grad_V)/4pi*eps)
+                FunctionTreeVector<3> gradeps_gradV;
+                FunctionTree<3> dx_eps_dx_V_el(*MRA);
+                FunctionTree<3> dy_eps_dy_V_el(*MRA);
+                FunctionTree<3> dz_eps_dz_V_el(*MRA);
+                
+                mult(dx_eps_dx_V_el, 1.0, dx_eps, dx_V_el);
+                mult(dy_eps_dy_V_el, 1.0, dy_eps, dy_V_el);
+                mult(dz_eps_dz_V_el, 1.0, dz_eps, dz_V_el);
+                
+                gradeps_gradV.push_back(1.0, &dx_eps_dx_V_el);
+                gradeps_gradV.push_back(1.0, &dy_eps_dy_V_el);
+                gradeps_gradV.push_back(1.0, &dz_eps_dz_V_el);
+
+                FunctionTree<3> temp_func(*MRA);
+                add(temp_func, gradeps_gradV);
+                temp_func *= 1.0/(4.0*pi);  
+                gradeps_gradV.clear();
+                
+                FunctionTree<3> gamma(*MRA);
+                mult(gamma, 1.0, temp_func, eps_inv);
+
+                
+                FunctionTree<3> sum_rhoeff_gamma(*MRA);
+                add(sum_rhoeff_gamma, 1.0, rho_eff, 1.0, gamma);
+
+
+                plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
+                       
+                //applying greensfunction
+                V_el_np1 = new FunctionTree<3>(*MRA);
+                apply(*V_el_np1, P, sum_rhoeff_gamma);
             
-            FunctionTree<3> gamma(*MRA);
-            mult(gamma, 1.0, temp_func, eps_inv);
-
-            
-            FunctionTree<3> sum_rhoeff_gamma(*MRA);
-            add(sum_rhoeff_gamma, 1.0, rho_eff, 1.0, gamma);
 
 
-            plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
-                   
-            //applying greensfunction
-            V_el_np1 = new FunctionTree<3>(*MRA);
-            apply(*V_el_np1, P, sum_rhoeff_gamma);
-        
+                //preparing for next iteration
+                FunctionTree<3> error_func(*MRA);
+                add(error_func, 1.0, *V_el_n, -1.0, *V_el_np1);
 
+                errorV = sqrt(error_func.getSquareNorm());
+                
+                delete V_el_n;
+                V_el_n = V_el_np1; 
+                cycle += 1;
+                std::cout << cycle << ":  " << errorV << std::endl; 
+                //Plotting
+                plt.surfPlot(*V_el_n, "V_el_n");
+                plt.surfPlot(gamma, "gamma");
 
-
-            //preparing for next iteration
-            
-            FunctionTree<3> error_func(*MRA);
-            add(error_func, 1.0, *V_el_n, -1.0, *V_el_n);
-            errorV = sqrt(error_func.getSquareNorm());
-            
-            delete V_el_n;
-            V_el_n = V_el_np1; 
-            
-            
-            //Plotting
-            plt.surfPlot(*V_el_n, "V_el");
-            plt.surfPlot(gamma, "gamma");
-
+            }
         }
-
         add(*V, 1.0, *V_el_n, 1.0, V_nuc);
 
 
@@ -757,8 +780,10 @@ void testSCFCavity(){
         FunctionTree<3> d_phi_n(*MRA);
         grid(d_phi_n, *phi_np1);                      // Copy grid from phi_np1
         add(d_phi_n, 1.0, *phi_np1, -1.0, *phi_n); // No grid relaxation
-        errorPhi = sqrt(d_phi_n.getSquareNorm());
-
+        if (errorPhi = sqrt(d_phi_n.getSquareNorm()));
+            {
+                errorV = 1;
+            }
         // Compute energy update
         d_energy_n = Vphi.dot(d_phi_n)/phi_np1->getSquareNorm();
         energy_np1 = energy_n + d_energy_n;
@@ -782,7 +807,7 @@ void testSCFCavity(){
         energy_n = energy_np1;
         phi_n = phi_np1;
         phi_n->normalize();
-
+        
 
                
         cycle_t.stop();
