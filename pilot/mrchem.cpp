@@ -519,7 +519,7 @@ void testSCF() {
 
 
 
-
+//nuclear potential function
 FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
 
     Timer timer;
@@ -556,6 +556,40 @@ FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
     return V_nuc;
 }
 
+//initial wavefunction estimate
+// Wave function
+FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
+    
+    Timer timer;
+    int oldlevel = TelePrompter::setPrintLevel(10);
+    TelePrompter::printHeader(0, "Projecting inital wavefunction");
+
+    FunctionTree<3> *phi = new FunctionTree<3>(*MRA);
+
+    auto func = [nucs] (const double *r) -> double{
+        double func_val = 0.0;
+        for (int i = 0; i < nucs.size(); i++){
+            double x = MathUtils::calcDistance(3, r, nucs[i].getCoord());
+            func_val += exp((-1.0*x*x)/nucs[i].getCharge());
+        }
+        return func_val;
+
+    };
+    
+    int max_scale = MRA->getMaxScale();
+    MWProjector<3> project(prec, max_scale);
+    project(*phi, func);
+
+    timer.stop();
+    TelePrompter::printFooter(0, timer, 2);
+    TelePrompter::setPrintLevel(oldlevel);
+
+    return phi;
+     
+
+};
+
+
 
 
 
@@ -575,8 +609,8 @@ void testSCFCavity(){
     MWProjector<3> project(prec, max_scale);
 
     // Nuclear parameters
-    double Z = 1.0;                     // Nuclear charge
-    double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
+   // double Z = 1.0;                     // Nuclear charge
+    //double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
   
     //Importing molecular information.
     std::vector<std::string> mol_coords = Input.getData("Molecule.coords");
@@ -589,28 +623,30 @@ void testSCFCavity(){
     double d_energy_n = 0.0;
 
    
-    // Wave function
-    FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
-    FunctionTree<3> *phi_np1 = 0;
-    {
-        Timer timer;
-        int oldlevel = TelePrompter::setPrintLevel(10);
-        TelePrompter::printHeader(0, "Projecting initial guess, phi");
-
-        auto f = [R] (const double *r) -> double {
-            double x = MathUtils::calcDistance(3, r, R);
-            return 1.0*exp(-1.0*x*x);
-        };
-
-        project(*phi_n, f);
-        phi_n->normalize();
-        timer.stop();
-        TelePrompter::printFooter(0, timer, 2);
-        TelePrompter::setPrintLevel(oldlevel);
-    }
-    
-    
     Nuclei &nucs = mol.getNuclei();
+   
+   
+    // Wave function
+    FunctionTree<3> *phi_n = initialWaveFunction(prec, nucs);
+    FunctionTree<3> *phi_np1 = 0;
+   // {
+   //     Timer timer;
+   //     int oldlevel = TelePrompter::setPrintLevel(10);
+   //     TelePrompter::printHeader(0, "Projecting initial guess, phi");
+
+   //     auto f = [R] (const double *r) -> double {
+   //         double x = MathUtils::calcDistance(3, r, R);
+   //         return 1.0*exp(-1.0*x*x);
+   //     };
+
+   //     project(*phi_n, f);
+   //     phi_n->normalize();
+   //     timer.stop();
+   //     TelePrompter::printFooter(0, timer, 2);
+   //     TelePrompter::setPrintLevel(oldlevel);
+   // }
+    
+    
     
     //nuclear potential
     FunctionTree<3> *V_nuc = nuclearPotential(prec, nucs);
