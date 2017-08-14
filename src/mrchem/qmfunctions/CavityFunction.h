@@ -10,9 +10,12 @@ public:
         : slope(s), nuclei(nucs), inverse(i), epsilon_0(eps_0), epsilon_inf(eps_inf) { }
     virtual ~CavityFunction() { }
 
-    double epsilon_0;//inside cavity
-    double epsilon_inf;//outside cavity
-
+    double get_epsilon_0(){
+        return epsilon_0;
+    }
+    double get_epsilon_inf(){
+        return epsilon_inf;
+    }
 
 
     double evalf(const double *r) const {
@@ -47,7 +50,12 @@ protected:
     double slope;
     Nuclei nuclei;
     bool inverse;
-    
+    double epsilon_0;//inside cavity
+    double epsilon_inf;//outside cavity
+   
 };
+
+
+
 
 #endif // CAVITYFUNCTION_H
