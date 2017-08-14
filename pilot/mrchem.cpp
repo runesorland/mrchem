@@ -9,7 +9,6 @@
  *
  */
 
-#pragma GCC system_header
 #include <Eigen/Core>
 
 #include "mrchem.h"
@@ -557,7 +556,6 @@ FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
 }
 
 //initial wavefunction estimate
-// Wave function
 FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
     
     Timer timer;
@@ -565,7 +563,6 @@ FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
     TelePrompter::printHeader(0, "Projecting inital wavefunction");
 
     FunctionTree<3> *phi = new FunctionTree<3>(*MRA);
-
     auto func = [nucs] (const double *r) -> double{
         double func_val = 0.0;
         for (int i = 0; i < nucs.size(); i++){
@@ -596,8 +593,8 @@ FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
 
 void testSCFCavity(){
     //Plotting parameters for surfPlot
-    double a[3] = { -4.0, -4.0, 0.0};
-    double b[3] = { 4.0, 4.0, 0.0};
+    double a[3] = { -10.0, -10.0, 0.0};
+    double b[3] = { 10.0, 10.0, 0.0};
     Plot<3> plt(10000, a, b);
         
     // Precision parameters
@@ -609,6 +606,7 @@ void testSCFCavity(){
     MWProjector<3> project(prec, max_scale);
 
     // Nuclear parameters
+   
    // double Z = 1.0;                     // Nuclear charge
     //double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
   
@@ -622,31 +620,11 @@ void testSCFCavity(){
     double energy_np1 = 0.0;
     double d_energy_n = 0.0;
 
-   
+    //atomic information from input file 
     Nuclei &nucs = mol.getNuclei();
-   
-   
     // Wave function
     FunctionTree<3> *phi_n = initialWaveFunction(prec, nucs);
     FunctionTree<3> *phi_np1 = 0;
-   // {
-   //     Timer timer;
-   //     int oldlevel = TelePrompter::setPrintLevel(10);
-   //     TelePrompter::printHeader(0, "Projecting initial guess, phi");
-
-   //     auto f = [R] (const double *r) -> double {
-   //         double x = MathUtils::calcDistance(3, r, R);
-   //         return 1.0*exp(-1.0*x*x);
-   //     };
-
-   //     project(*phi_n, f);
-   //     phi_n->normalize();
-   //     timer.stop();
-   //     TelePrompter::printFooter(0, timer, 2);
-   //     TelePrompter::setPrintLevel(oldlevel);
-   // }
-    
-    
     
     //nuclear potential
     FunctionTree<3> *V_nuc = nuclearPotential(prec, nucs);
@@ -659,13 +637,14 @@ void testSCFCavity(){
         int oldlevel = TelePrompter::setPrintLevel(10);
         TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
 
-        double slope = 0.2;//slope of cavity, lower double --> steeper slope.
+        double slope = 0.4;//slope of cavity, lower double --> steeper slope.
         double eps_0 = 1.0;
-        double eps_inf = 10.0;
-
+        double eps_inf = 100.0;
+        
+        //cavity
         CavityFunction cavity(nucs, slope, false, eps_0, eps_inf);
         project(eps, cavity);
-
+    
         //cavity invers
         CavityFunction cavity_inv(nucs, slope, true, eps_0, eps_inf);
         project(eps_inv, cavity_inv);
@@ -675,11 +654,7 @@ void testSCFCavity(){
         TelePrompter::setPrintLevel(oldlevel);
     
     }
-
-
-       
-    //initializing operator
-
+    //initializing operators
     double scf_prec = prec;
    
     //derivative
@@ -687,10 +662,10 @@ void testSCFCavity(){
     ABGVOperator<3> D(*MRA, boundary1, boundary2);
     MWDerivative<3> applyDerivative(max_scale); 
     
-    // Poissoni/Greens
+    // Poisson/Greens
     PoissonOperator P(*MRA, scf_prec);
 
-    // arithmetics 
+    //arithmetics 
     MWAdder<3> add(scf_prec, max_scale);
     MWMultiplier<3> mult(scf_prec, max_scale);
     MWConvolution<3> apply(scf_prec, max_scale);
@@ -704,21 +679,16 @@ void testSCFCavity(){
     applyDerivative(dy_eps, D, eps, 1);
     applyDerivative(dz_eps, D, eps, 2);
 
-
     FunctionTree<3> *V = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_n = new FunctionTree<3>(*MRA);
     V_el_n->setZero();
     FunctionTree<3> *V_el_np1 = 0;
-    
-    
     
     TelePrompter::printHeader(0, "Running SCF");
     printout(0, " Iter");
     printout(0, "      E_np1          dE_n   ");
     printout(0, "   ||phi_np1||   ||dPhi_n||" << endl);
     TelePrompter::printSeparator(0, '-');
-    
-
 
     int cycle = 0; 
     int iter = 1;
@@ -734,25 +704,20 @@ void testSCFCavity(){
                 FunctionTree<3> dx_V_el(*MRA);
                 FunctionTree<3> dy_V_el(*MRA);
                 FunctionTree<3> dz_V_el(*MRA);
-                
                   
                 applyDerivative(dx_V_el, D, *V_el_n, 0);
                 applyDerivative(dy_V_el, D, *V_el_n, 1);
                 applyDerivative(dz_V_el, D, *V_el_n, 2);
 
-                plt.surfPlot(dx_V_el, "dx_V_el"); 
-                plt.surfPlot(dy_V_el, "dy_V_el"); 
-                plt.surfPlot(dz_V_el, "dz_V_el"); 
-                
+                      
                 //creating rho_eff (rho/eps)
                 FunctionTree<3> rho(*MRA);
                 mult(rho, 1.0, *phi_n, *phi_n);
                 
                 FunctionTree<3> rho_eff(*MRA);
                 mult(rho_eff, 1.0, rho, eps_inv);
-               
 
-                //creating gamma (grad_eps*grad_V)/4pi*eps)
+                //creating gamma (grad_eps*grad_V)/(4pi*eps)
                 FunctionTreeVector<3> gradeps_gradV;
                 FunctionTree<3> dx_eps_dx_V_el(*MRA);
                 FunctionTree<3> dy_eps_dy_V_el(*MRA);
@@ -773,20 +738,15 @@ void testSCFCavity(){
                 
                 FunctionTree<3> gamma(*MRA);
                 mult(gamma, 1.0, temp_func, eps_inv);
-
                 
                 FunctionTree<3> sum_rhoeff_gamma(*MRA);
                 add(sum_rhoeff_gamma, 1.0, rho_eff, 1.0, gamma);
 
-
-                plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
                        
                 //applying greensfunction
                 V_el_np1 = new FunctionTree<3>(*MRA);
                 apply(*V_el_np1, P, sum_rhoeff_gamma);
             
-
-
                 //preparing for next iteration
                 FunctionTree<3> error_func(*MRA);
                 add(error_func, 1.0, *V_el_n, -1.0, *V_el_np1);
@@ -797,10 +757,18 @@ void testSCFCavity(){
                 V_el_n = V_el_np1; 
                 cycle += 1;
                 std::cout << cycle << ":  " << errorV << std::endl; 
+                
                 //Plotting
                 plt.surfPlot(*V_el_n, "V_el_n");
                 plt.surfPlot(gamma, "gamma");
-
+                plt.surfPlot(dx_V_el, "dx_V_el"); 
+                plt.surfPlot(dy_V_el, "dy_V_el"); 
+                plt.surfPlot(dz_V_el, "dz_V_el"); 
+                plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
+                plt.surfPlot(*V, "V");
+                plt.surfPlot(eps,"eps"); 
+        
+        
             }
         }
         
@@ -812,12 +780,10 @@ void testSCFCavity(){
         double mu_n = sqrt(-2.0*energy_n);
         HelmholtzOperator H(*MRA, mu_n, scf_prec);
 
-
         // Compute Helmholtz argument V*phi
         FunctionTree<3> Vphi(*MRA);
         grid(Vphi, *phi_n);  // Copy grid from orbital
         mult(Vphi, 1.0, *V, *phi_n, 1);   
-        
         
         // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
         phi_np1 = new FunctionTree<3>(*MRA);
@@ -826,8 +792,8 @@ void testSCFCavity(){
 
         // Compute orbital residual
         FunctionTree<3> d_phi_n(*MRA);
-        grid(d_phi_n, *phi_np1);                      // Copy grid from phi_np1
-        add(d_phi_n, 1.0, *phi_np1, -1.0, *phi_n); // No grid relaxation
+        grid(d_phi_n, *phi_np1);                     
+        add(d_phi_n, 1.0, *phi_np1, -1.0, *phi_n); 
         
         errorPhi = sqrt(d_phi_n.getSquareNorm());
         errorV = 1;
@@ -848,16 +814,11 @@ void testSCFCavity(){
         TelePrompter::setPrecision(15);
         printout(0, endl);
 
-
-        
-
         // Prepare for next iteration
         energy_n = energy_np1;
         phi_n = phi_np1;
         phi_n->normalize();
         
-
-               
         cycle_t.stop();
         scf_t.push_back(cycle_t);
         iter++;
@@ -1191,7 +1152,7 @@ at (0,0,0) and (1,0,0), center of H atom from input file
    
 */  
     double vdw = nucs[0].getElement().getVdw();    
-    double E_ref = - (cavity.epsilon_inf-1.0)/(cavity.epsilon_inf * vdw);
+    double E_ref = - (cavity.get_epsilon_inf()-1.0)/(cavity.get_epsilon_inf() * vdw);
     println(0,"E_ref" << E_ref);
 
     
