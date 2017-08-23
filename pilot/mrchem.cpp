@@ -540,6 +540,7 @@ FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
             double x = MathUtils::calcDistance(3, r, nucs[i].getCoord());
             func_val += -1.0*nucs[i].getCharge()*u(x/c)/c;
         }
+     
         return func_val;
     };  
    
@@ -589,8 +590,6 @@ FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
 
 
 
-
-
 void testSCFCavity(){
     //Plotting parameters for surfPlot
     double a[3] = { -10.0, -10.0, 0.0};
@@ -604,11 +603,7 @@ void testSCFCavity(){
     // Initializing projector
     GridGenerator<3> grid(max_scale);
     MWProjector<3> project(prec, max_scale);
-
-    // Nuclear parameters
    
-   // double Z = 1.0;                     // Nuclear charge
-    //double R[3] = {0.0, 0.0, 0.0};      // Nuclear position
   
     //Importing molecular information.
     std::vector<std::string> mol_coords = Input.getData("Molecule.coords");
@@ -622,13 +617,15 @@ void testSCFCavity(){
 
     //atomic information from input file 
     Nuclei &nucs = mol.getNuclei();
+
     // Wave function
     FunctionTree<3> *phi_n = initialWaveFunction(prec, nucs);
     FunctionTree<3> *phi_np1 = 0;
     
     //nuclear potential
     FunctionTree<3> *V_nuc = nuclearPotential(prec, nucs);
-       
+    plt.surfPlot(*V_nuc, "V_nuc_initial");
+    
     //cavity
     FunctionTree<3> eps(*MRA);
     FunctionTree<3> eps_inv(*MRA);
@@ -637,9 +634,9 @@ void testSCFCavity(){
         int oldlevel = TelePrompter::setPrintLevel(10);
         TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
 
-        double slope = 0.4;//slope of cavity, lower double --> steeper slope.
+        double slope = 0.2;//slope of cavity, lower double --> steeper slope.
         double eps_0 = 1.0;
-        double eps_inf = 100.0;
+        double eps_inf = 10.0;
         
         //cavity
         CavityFunction cavity(nucs, slope, false, eps_0, eps_inf);
@@ -767,7 +764,9 @@ void testSCFCavity(){
                 plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
                 plt.surfPlot(*V, "V");
                 plt.surfPlot(eps,"eps"); 
-        
+                plt.surfPlot(*V_nuc,"V_nuc");
+                plt.surfPlot(rho_eff, "rho_eff");
+                        
         
             }
         }
