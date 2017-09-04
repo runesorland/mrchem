@@ -518,7 +518,8 @@ void testSCF() {
 
 
 
-//nuclear potential function
+//nuclear ps to e fire
+//tential function
 FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
 
     Timer timer;
@@ -587,8 +588,68 @@ FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
 
 };
 
+double surfaceChargeTesting(
+                FunctionTree<3> epsilon, 
+                FunctionTree<3> epsilon_inv, 
+                FunctionTree<3> dx_epsilon, 
+                FunctionTree<3> dy_epsilon,
+                FunctionTree<3> dz_epsilon,
+                FunctionTree<3> V_g,
+                FunctionTree<3> V){
+        
+    //arithmetics 
+    int max_scale = MRA->getMaxScale();
+    double prec = Input.get<double>("rel_prec");
+    MWAdder<3> add(prec, max_scale);
+    MWMultiplier<3> mult(prec, max_scale);
+        
+    //creating gamma (grad_eps*grad_V)/(4pi*eps)
+    FunctionTreeVector<3> gradeps_gradV;
+    FunctionTree<3> dx_V_g(*MRA);
+    FunctionTree<3> dy_V_g(*MRA);
+    FunctionTree<3> dz_V_g(*MRA);
+    FunctionTree<3> dx_eps_dx_V(*MRA);
+    FunctionTree<3> dy_eps_dy_V(*MRA);
+    FunctionTree<3> dz_eps_dz_V(*MRA);
+   
+    double boundary1 = 0.0, boundary2 = 0.0;
+    ABGVOperator<3> D(*MRA, boundary1, boundary2);
+    MWDerivative<3> applyDerivative(max_scale); 
+
+    
+    //KRESJAR HER!!
+    std::cout << "                                             e det her????" << std::endl; 
+    applyDerivative(dx_V_g, D, V_g, 0);
+    applyDerivative(dy_V_g, D, V_g, 1);
+    applyDerivative(dz_V_g, D, V_g, 2);
+    std::cout << "                                                                                 e det her????" << std::endl;
 
 
+    mult(dx_eps_dx_V, 1.0, dx_epsilon, dx_V_g);
+    mult(dy_eps_dy_V, 1.0, dy_epsilon, dy_V_g);
+    mult(dz_eps_dz_V, 1.0, dz_epsilon, dz_V_g);
+    
+    std::cout << "hallo fra den andre siden" << std::endl; 
+    gradeps_gradV.push_back(1.0, &dx_eps_dx_V);
+    gradeps_gradV.push_back(1.0, &dy_eps_dy_V);
+    gradeps_gradV.push_back(1.0, &dz_eps_dz_V);
+
+    FunctionTree<3> temp_func(*MRA);
+    add(temp_func, gradeps_gradV);
+    temp_func *= 1.0/(4.0*pi);  
+    gradeps_gradV.clear();
+    
+    FunctionTree<3> gamma(*MRA);
+    mult(gamma, 1.0, temp_func, epsilon_inv);
+
+
+    FunctionTree<3> gammaV(*MRA);
+    mult(gammaV, 1.0, V, gamma);
+  
+    double integral = gammaV.integrate();
+    
+    return integral;
+};
 
 void testSCFCavity(){
     //Plotting parameters for surfPlot
@@ -603,7 +664,6 @@ void testSCFCavity(){
     // Initializing projector
     GridGenerator<3> grid(max_scale);
     MWProjector<3> project(prec, max_scale);
-   
   
     //Importing molecular information.
     std::vector<std::string> mol_coords = Input.getData("Molecule.coords");
@@ -676,11 +736,12 @@ void testSCFCavity(){
     applyDerivative(dy_eps, D, eps, 1);
     applyDerivative(dz_eps, D, eps, 2);
 
+    //Initializing functions for later use
     FunctionTree<3> *V = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_n = new FunctionTree<3>(*MRA);
     V_el_n->setZero();
     FunctionTree<3> *V_el_np1 = 0;
-    
+   
     TelePrompter::printHeader(0, "Running SCF");
     printout(0, " Iter");
     printout(0, "      E_np1          dE_n   ");
@@ -752,10 +813,12 @@ void testSCFCavity(){
                 
                 delete V_el_n;
                 V_el_n = V_el_np1; 
+               
+                
                 cycle += 1;
                 std::cout << cycle << ":  " << errorV << std::endl; 
                 
-                //Plotting
+                //Plotting and testing
                 plt.surfPlot(*V_el_n, "V_el_n");
                 plt.surfPlot(gamma, "gamma");
                 plt.surfPlot(dx_V_el, "dx_V_el"); 
@@ -766,8 +829,14 @@ void testSCFCavity(){
                 plt.surfPlot(eps,"eps"); 
                 plt.surfPlot(*V_nuc,"V_nuc");
                 plt.surfPlot(rho_eff, "rho_eff");
-                        
-        
+                
+               
+                // double int_gamma = gamma.integrate(); 
+                // std::cout << "####################" << int_gamma << std::endl;
+                std::cout << "e det her du kresjar??" << std::endl;
+                double integral = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, *V_el_n, *V_el_n);              
+                std::cout << "#############   int_gammaV:  " << integral;
+                std::cout << " kommar du deg hit?" << std::endl;
             }
         }
         
@@ -845,6 +914,12 @@ void testSCFCavity(){
 
 
 }
+
+
+
+
+
+
 
 
 
