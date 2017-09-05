@@ -589,13 +589,13 @@ FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
 };
 
 double surfaceChargeTesting(
-                FunctionTree<3> epsilon, 
-                FunctionTree<3> epsilon_inv, 
-                FunctionTree<3> dx_epsilon, 
-                FunctionTree<3> dy_epsilon,
-                FunctionTree<3> dz_epsilon,
-                FunctionTree<3> V_g,
-                FunctionTree<3> V){
+                FunctionTree<3> &epsilon, 
+                FunctionTree<3> &epsilon_inv, 
+                FunctionTree<3> &dx_epsilon, 
+                FunctionTree<3> &dy_epsilon,
+                FunctionTree<3> &dz_epsilon,
+                FunctionTree<3> *V_g,
+                FunctionTree<3> *V){
         
     //arithmetics 
     int max_scale = MRA->getMaxScale();
@@ -618,18 +618,23 @@ double surfaceChargeTesting(
 
     
     //KRESJAR HER!!
-    std::cout << "                                             e det her????" << std::endl; 
-    applyDerivative(dx_V_g, D, V_g, 0);
-    applyDerivative(dy_V_g, D, V_g, 1);
-    applyDerivative(dz_V_g, D, V_g, 2);
-    std::cout << "                                                                                 e det her????" << std::endl;
-
-
+    applyDerivative(dx_V_g, D, *V_g, 0);
+    applyDerivative(dy_V_g, D, *V_g, 1);
+    applyDerivative(dz_V_g, D, *V_g, 2);
+    
+    
+    //Plotting parameters for surfPlot
+    double a[3] = { -10.0, -10.0, 0.0};
+    double b[3] = { 10.0, 10.0, 0.0};
+    Plot<3> plt(10000, a, b);
+     
+   
+    plt.surfPlot(dx_epsilon, "dx_epsilon");
+    
     mult(dx_eps_dx_V, 1.0, dx_epsilon, dx_V_g);
     mult(dy_eps_dy_V, 1.0, dy_epsilon, dy_V_g);
     mult(dz_eps_dz_V, 1.0, dz_epsilon, dz_V_g);
     
-    std::cout << "hallo fra den andre siden" << std::endl; 
     gradeps_gradV.push_back(1.0, &dx_eps_dx_V);
     gradeps_gradV.push_back(1.0, &dy_eps_dy_V);
     gradeps_gradV.push_back(1.0, &dz_eps_dz_V);
@@ -641,12 +646,8 @@ double surfaceChargeTesting(
     
     FunctionTree<3> gamma(*MRA);
     mult(gamma, 1.0, temp_func, epsilon_inv);
-
-
-    FunctionTree<3> gammaV(*MRA);
-    mult(gammaV, 1.0, V, gamma);
   
-    double integral = gammaV.integrate();
+    double integral = V->dot(gamma);
     
     return integral;
 };
@@ -694,9 +695,10 @@ void testSCFCavity(){
         int oldlevel = TelePrompter::setPrintLevel(10);
         TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
 
-        double slope = 0.2;//slope of cavity, lower double --> steeper slope.
+        double slope = 0.4; //slope of cavity, lower double --> steeper slope.
         double eps_0 = 1.0;
-        double eps_inf = 10.0;
+        double eps_inf = 2.27;
+
         
         //cavity
         CavityFunction cavity(nucs, slope, false, eps_0, eps_inf);
@@ -766,7 +768,6 @@ void testSCFCavity(){
                 applyDerivative(dx_V_el, D, *V_el_n, 0);
                 applyDerivative(dy_V_el, D, *V_el_n, 1);
                 applyDerivative(dz_V_el, D, *V_el_n, 2);
-
                       
                 //creating rho_eff (rho/eps)
                 FunctionTree<3> rho(*MRA);
@@ -819,24 +820,26 @@ void testSCFCavity(){
                 std::cout << cycle << ":  " << errorV << std::endl; 
                 
                 //Plotting and testing
-                plt.surfPlot(*V_el_n, "V_el_n");
-                plt.surfPlot(gamma, "gamma");
-                plt.surfPlot(dx_V_el, "dx_V_el"); 
-                plt.surfPlot(dy_V_el, "dy_V_el"); 
-                plt.surfPlot(dz_V_el, "dz_V_el"); 
-                plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
-                plt.surfPlot(*V, "V");
-                plt.surfPlot(eps,"eps"); 
-                plt.surfPlot(*V_nuc,"V_nuc");
-                plt.surfPlot(rho_eff, "rho_eff");
-                
-               
-                // double int_gamma = gamma.integrate(); 
-                // std::cout << "####################" << int_gamma << std::endl;
-                std::cout << "e det her du kresjar??" << std::endl;
-                double integral = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, *V_el_n, *V_el_n);              
-                std::cout << "#############   int_gammaV:  " << integral;
-                std::cout << " kommar du deg hit?" << std::endl;
+               // plt.surfPlot(*V_el_n, "V_el_n");
+               // plt.surfPlot(gamma, "gamma");
+               // plt.surfPlot(dx_V_el, "dx_V_el"); 
+               // plt.surfPlot(dy_V_el, "dy_V_el"); 
+               // plt.surfPlot(dz_V_el, "dz_V_el"); 
+               // plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
+               // plt.surfPlot(*V, "V");
+               // plt.surfPlot(eps,"eps"); 
+               // plt.surfPlot(*V_nuc,"V_nuc");
+               // plt.surfPlot(rho_eff, "rho_eff");
+               // plt.surfPlot(dx_eps, "dx_eps"); 
+               //
+                double integral_el_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_el_n);
+                double integral_el_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_nuc);
+                double integral_N_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_el_n);
+                double integral_N_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_nuc);
+                std::cout << "##########################" << integral_el_el << std::endl;
+                std::cout << "##########################" << integral_el_N << std::endl;
+                std::cout << "##########################" << integral_N_el << std::endl;
+                std::cout << "##########################" << integral_N_N << std::endl;
             }
         }
         
