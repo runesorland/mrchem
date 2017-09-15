@@ -557,6 +557,33 @@ FunctionTree<3>* nuclearPotential(double prec, const Nuclei &nucs) {
     return V_nuc;
 }
 
+FunctionTree<3>* nuclearChargeDensity(double prec, const Nuclei &nucs){
+    
+    Timer timer;
+    int oldlevel = TelePrompter::setPrintLevel(10);
+    TelePrompter::printHeader(0, "Projecting nuclear density");
+   
+    FunctionTree<3> *rho_nuc = new FunctionTree<3>(*MRA);
+    
+    double beta = pow(10.0, 6.0);
+    double alpha = pow((beta/pi),(3.0/2.0));
+    GaussFunc<3> func(alpha, beta, nucs[0].getCoord());
+
+    int max_scale = MRA->getMaxScale();
+    MWProjector<3> project(prec, max_scale);
+    GridGenerator<3> grid(max_scale);
+    grid(*rho_nuc, func);
+    project(*rho_nuc, func);
+    timer.stop();
+
+    TelePrompter::printFooter(0, timer, 2);
+    TelePrompter::setPrintLevel(oldlevel);
+
+    return rho_nuc;
+
+
+    }   
+
 //initial wavefunction estimate
 FunctionTree<3>* initialWaveFunction(double prec, const Nuclei &nucs){
     
@@ -616,8 +643,6 @@ double surfaceChargeTesting(
     ABGVOperator<3> D(*MRA, boundary1, boundary2);
     MWDerivative<3> applyDerivative(max_scale); 
 
-    
-    //KRESJAR HER!!
     applyDerivative(dx_V_g, D, *V_g, 0);
     applyDerivative(dy_V_g, D, *V_g, 1);
     applyDerivative(dz_V_g, D, *V_g, 2);
@@ -627,7 +652,6 @@ double surfaceChargeTesting(
     double a[3] = { -10.0, -10.0, 0.0};
     double b[3] = { 10.0, 10.0, 0.0};
     Plot<3> plt(10000, a, b);
-     
    
     plt.surfPlot(dx_epsilon, "dx_epsilon");
     
@@ -656,7 +680,7 @@ void testSCFCavity(){
     //Plotting parameters for surfPlot
     double a[3] = { -10.0, -10.0, 0.0};
     double b[3] = { 10.0, 10.0, 0.0};
-    Plot<3> plt(10000, a, b);
+    Plot<3> plt(100000, a, b);
         
     // Precision parameters
     int max_scale = MRA->getMaxScale();
@@ -680,12 +704,19 @@ void testSCFCavity(){
     Nuclei &nucs = mol.getNuclei();
 
     // Wave function
-    FunctionTree<3> *phi_n = initialWaveFunction(prec, nucs);
+    
+    //FunctionTree<3> *phi_n = initialWaveFunction(prec, nucs);
+    FunctionTree<3> *phi_n = new FunctionTree<3>(*MRA);
+    phi_n->setZero();//###########################################REMOVE!!!
     FunctionTree<3> *phi_np1 = 0;
     
     //nuclear potential
     FunctionTree<3> *V_nuc = nuclearPotential(prec, nucs);
     plt.surfPlot(*V_nuc, "V_nuc_initial");
+   
+
+    FunctionTree<3> *rho_nuc = nuclearChargeDensity(prec, nucs);
+    
     
     //cavity
     FunctionTree<3> eps(*MRA);
@@ -695,9 +726,9 @@ void testSCFCavity(){
         int oldlevel = TelePrompter::setPrintLevel(10);
         TelePrompter::printHeader(0, "Projecting cavityfunction and cavityfunction inverse");
 
-        double slope = 0.4; //slope of cavity, lower double --> steeper slope.
+        double slope = 0.2; //slope of cavity, lower double --> steeper slope.
         double eps_0 = 1.0;
-        double eps_inf = 2.27;
+        double eps_inf = 80.0;
 
         
         //cavity
@@ -742,6 +773,8 @@ void testSCFCavity(){
     FunctionTree<3> *V = new FunctionTree<3>(*MRA);
     FunctionTree<3> *V_el_n = new FunctionTree<3>(*MRA);
     V_el_n->setZero();
+    
+    
     FunctionTree<3> *V_el_np1 = 0;
    
     TelePrompter::printHeader(0, "Running SCF");
@@ -755,9 +788,9 @@ void testSCFCavity(){
     double errorPhi = 1.0;
     double errorV = 1.0;
     vector<Timer> scf_t;
-    while (errorPhi > scf_prec) {
-        Timer cycle_t;    
-        if (errorPhi < scf_prec*10){
+   // while (errorPhi > scf_prec) {
+    //    Timer cycle_t;    
+    //    if (errorPhi < scf_prec*10){
             while (errorV > scf_prec){
             
                 //derivative of electrostatic potential
@@ -770,9 +803,11 @@ void testSCFCavity(){
                 applyDerivative(dz_V_el, D, *V_el_n, 2);
                       
                 //creating rho_eff (rho/eps)
+                FunctionTree<3> rho_el(*MRA);
                 FunctionTree<3> rho(*MRA);
-                mult(rho, 1.0, *phi_n, *phi_n);
-                
+                mult(rho_el, 1.0, *phi_n, *phi_n);
+                add(rho, 1.0, rho_el, 1.0, *rho_nuc);
+
                 FunctionTree<3> rho_eff(*MRA);
                 mult(rho_eff, 1.0, rho, eps_inv);
 
@@ -797,7 +832,36 @@ void testSCFCavity(){
                 
                 FunctionTree<3> gamma(*MRA);
                 mult(gamma, 1.0, temp_func, eps_inv);
+              
+                //////////////////////////////////////////// 
+                FunctionTreeVector<3> TEST_VEC;
+                TEST_VEC.push_back(1.0, &gamma);
+                TEST_VEC.push_back(-1.0, &rho);
+                TEST_VEC.push_back(1.0, &rho_eff);
+                FunctionTree<3> TEST(*MRA);
+                add(TEST,TEST_VEC);
                 
+                FunctionTree<3> G_TEST(*MRA);
+                apply(G_TEST, P, TEST);
+                
+                FunctionTree<3> G_rho(*MRA);
+                apply(G_rho, P, rho);
+
+                double INTEGRAL_rho_Gtest = rho.dot(G_TEST);
+                double INTEGRAL_Grho_test = G_rho.dot(TEST);
+                
+
+                std::cout << "int rho * G(gamma - rho - rho_eff):" << INTEGRAL_rho_Gtest << std::endl;
+                std::cout << "int Grho * (gamma - rho - rho_eff):" << INTEGRAL_Grho_test << std::endl;
+                std::cout << "int gamma                         :" << gamma.integrate() << std::endl;
+                std::cout << "int rho                           :" << rho.integrate() << std::endl;
+                std::cout << "int tho_nuc                       :" << rho_nuc->integrate() << std::endl;
+                std::cout << "int rho_el                        :" << rho_el.integrate() << std::endl;
+                TEST_VEC.clear();
+                /////////////////////////////////////
+
+
+
                 FunctionTree<3> sum_rhoeff_gamma(*MRA);
                 add(sum_rhoeff_gamma, 1.0, rho_eff, 1.0, gamma);
 
@@ -819,10 +883,14 @@ void testSCFCavity(){
                 cycle += 1;
                 std::cout << cycle << ":  " << errorV << std::endl; 
                 
+
                 //Plotting and testing
-               // plt.surfPlot(*V_el_n, "V_el_n");
-               // plt.surfPlot(gamma, "gamma");
-               // plt.surfPlot(dx_V_el, "dx_V_el"); 
+                plt.surfPlot(*V_el_n, "V_el_n");
+                plt.surfPlot(gamma, "gamma");
+                plt.surfPlot(rho,"rho");
+                plt.surfPlot(rho_eff,"rho_eff");
+                plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
+                // plt.surfPlot(dx_V_el, "dx_V_el"); 
                // plt.surfPlot(dy_V_el, "dy_V_el"); 
                // plt.surfPlot(dz_V_el, "dz_V_el"); 
                // plt.surfPlot(sum_rhoeff_gamma, "sum_rhoeff_gamma");
@@ -832,18 +900,20 @@ void testSCFCavity(){
                // plt.surfPlot(rho_eff, "rho_eff");
                // plt.surfPlot(dx_eps, "dx_eps"); 
                //
-                double integral_el_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_el_n);
-                double integral_el_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_nuc);
-                double integral_N_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_el_n);
-                double integral_N_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_nuc);
-                std::cout << "##########################" << integral_el_el << std::endl;
-                std::cout << "##########################" << integral_el_N << std::endl;
-                std::cout << "##########################" << integral_N_el << std::endl;
-                std::cout << "##########################" << integral_N_N << std::endl;
+    //            double integral_el_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_el_n);
+    //            double integral_el_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_el_n, V_nuc);
+    //            double integral_N_el = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_el_n);
+    //            double integral_N_N = surfaceChargeTesting(eps, eps_inv, dx_eps, dy_eps, dz_eps, V_nuc, V_nuc);
+    //            std::cout << "##########################" << integral_el_el << std::endl;
+    //            std::cout << "##########################" << integral_el_N << std::endl;
+    //            std::cout << "##########################" << integral_N_el << std::endl;
+    //            std::cout << "##########################" << integral_N_N << std::endl;
             }
+        /*
         }
-        
-        add(*V, 1.0, *V_el_n, 1.0, *V_nuc);
+        std::cout << "test1" << std::endl; 
+        V = V_el_n; 
+//        add(*V, 1.0, *V_el_n, 1.0, *V_nuc);
 
 
         // Helmholtz operator
@@ -856,11 +926,15 @@ void testSCFCavity(){
         grid(Vphi, *phi_n);  // Copy grid from orbital
         mult(Vphi, 1.0, *V, *phi_n, 1);   
         
+        std::cout << "test2" << std::endl; 
+        
         // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
         phi_np1 = new FunctionTree<3>(*MRA);
         apply(*phi_np1, H, Vphi);
         *phi_np1 *= -1.0/(2.0*pi);
-
+        
+        std::cout << "test3"<< std::endl;
+        
         // Compute orbital residual
         FunctionTree<3> d_phi_n(*MRA);
         grid(d_phi_n, *phi_np1);                     
@@ -868,6 +942,8 @@ void testSCFCavity(){
         
         errorPhi = sqrt(d_phi_n.getSquareNorm());
         errorV = 1;
+
+        std::cout << "test4" << std::endl;
         
         // Compute energy update
         d_energy_n = Vphi.dot(d_phi_n)/phi_np1->getSquareNorm();
@@ -884,7 +960,7 @@ void testSCFCavity(){
         printout(0, setw(9) << errorPhi);
         TelePrompter::setPrecision(15);
         printout(0, endl);
-
+        std::cout << "test5" << std::endl;
         // Prepare for next iteration
         energy_n = energy_np1;
         phi_n = phi_np1;
@@ -894,9 +970,11 @@ void testSCFCavity(){
         scf_t.push_back(cycle_t);
         iter++;
         
+
     }
     
 
+        */
     
     TelePrompter::printSeparator(0, '=', 2);
 
