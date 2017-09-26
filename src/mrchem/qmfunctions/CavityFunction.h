@@ -27,7 +27,8 @@ public:
         for (int i = 0; i < this->nuclei.size(); i++) {
             const Nucleus &nuc = this->nuclei[i];
             const double *coord = nuc.getCoord();
-            double rad = nuc.getElement().getVdw();
+            double rad = Input.get<double>("Cavity.radius"); 
+       //     double rad = nuc.getElement().getVdw();
 
             double s = sqrt(pow(coord[0]-r[0],2)+pow(coord[1]-r[1],2)+pow(coord[2]-r[2],2)) - rad;
             double theta = 0.5*(1+erf(s/slope));
