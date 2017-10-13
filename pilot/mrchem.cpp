@@ -423,6 +423,7 @@ void testSCFCavity(){
                 add(sum_rhoeff_gamma, 1.0, rho_eff, 1.0, gamma);
 
                 //applying Poisson function
+    
                 V_el_np1 = new FunctionTree<3>(*MRA);
                 apply(*V_el_np1, P, sum_rhoeff_gamma);
                
@@ -432,6 +433,7 @@ void testSCFCavity(){
                 add(sum_rhoeff_gamma_neg_rho, 1.0, sum_rhoeff_gamma, -1.0, rho);
                 
                 //applying Poisson operator
+                if (V_r!=0) delete V_r;
                 V_r = new FunctionTree<3>(*MRA);
                 apply(*V_r, P, sum_rhoeff_gamma_neg_rho);
                 
@@ -441,7 +443,7 @@ void testSCFCavity(){
 
                 errorV = sqrt(error_func.getSquareNorm());
                 
-                delete V_el_n;
+                if (V_el_n!=0) {delete V_el_n;}
                 V_el_n = V_el_np1; 
                
                 cycle += 1;
@@ -491,7 +493,7 @@ void testSCFCavity(){
                 
                 /////////////////////////////////////
                        
-                //std::cout << "int V_r                                           :" << V_r->integrate() << std::endl;
+                //std::cout << "int V_r :" << V_r->integrate() << std::endl;
 
                 //plt.surfPlot(*phi_n, "phi_n");
                 //plt.surfPlot(*V_el_n, "V_el_n");
@@ -530,7 +532,9 @@ void testSCFCavity(){
         V_sum.push_back(1.0, V_nuc);
         V_sum.push_back(.5, &V_el);//not included for the one electron case
         
+       // std::cout << "TEST1" << std::endl;
         if (V != 0) delete V;
+       // std::cout << "TEST2" << std::endl;
         V = new FunctionTree<3>(*MRA);
         add(*V, V_sum); 
 
@@ -548,6 +552,9 @@ void testSCFCavity(){
         mult(Vphi, 1.0, *V, *phi_n, 1);   
         
         // Apply Helmholtz operator phi^n+1 = H[V*phi^n]
+       // std::cout << "TEST3" << std::endl;
+       // if (phi_np1!=0) {delete phi_np1;}
+       // std::cout << "TEST4" << std::endl;
         phi_np1 = new FunctionTree<3>(*MRA);
         apply(*phi_np1, H, Vphi);
         *phi_np1 *= -1.0/(2.0*pi);
@@ -608,9 +615,9 @@ void testSCFCavity(){
 
         printout(0, setw(0) << iter << ":");
         TelePrompter::setPrecision(7);
-        printout(0, setw(14) << energy_V_nuc);
+        printout(0, setw(14) << energy_np1);
         TelePrompter::setPrecision(7);
-        printout(0, setw(15) << energy_V_el);
+        printout(0, setw(15) << energy_V_nuc);
         TelePrompter::setPrecision(7);
         printout(0, setw(14) << energy_V_el);
         TelePrompter::setPrecision(7);
@@ -621,6 +628,7 @@ void testSCFCavity(){
    
         // Prepare for next iteration
         energy_n = energy_np1;
+        if (phi_n!=0) {delete phi_n;}
         phi_n = phi_np1;
         phi_n->normalize();
         
