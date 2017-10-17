@@ -20,6 +20,7 @@ add_library(qmoperators STATIC
     XCFunctional.cpp
     XCPotential.cpp
     XCOperator.cpp
+    ReactionPotential.cpp
 )
 
 target_link_libraries(qmoperators

@@ -8,8 +8,9 @@ public:
         NuclearPotential &v,
         CoulombOperator &j,
         XCOperator &xc,
-        ExchangeOperator *k = 0)
-        : FockOperator(&t, &v, &j, k, &xc) { }
+        ExchangeOperator *k = 0,
+        ReactionPotential *u = 0)
+        : FockOperator(&t, &v, &j, k, &xc, u) { }
     virtual ~DFT() { }
 };
 

@@ -12,6 +12,7 @@ class KineticOperator;
 class CoulombOperator;
 class ExchangeOperator;
 class XCOperator;
+class ReactionPotential;
 class Orbital;
 class OrbitalVector;
 class SCFEnergy;
@@ -22,7 +23,8 @@ public:
                  NuclearPotential *v = 0,
                  CoulombOperator *j = 0,
                  ExchangeOperator *k = 0,
-                 XCOperator *xc = 0);
+                 XCOperator *xc = 0,
+                 ReactionPotential *u = 0);
     virtual ~FockOperator();
 
     void setPerturbationOperator(QMOperatorExp &h_1) { this->H_1 = &h_1; }
@@ -33,6 +35,7 @@ public:
     CoulombOperator *getCoulombOperator() { return this->J; }
     ExchangeOperator *getExchangeOperator() { return this->K; }
     XCOperator *getXCOperator() { return this->XC; }
+    ReactionPotential *getReactionPotential() { return this->U; }
 
     void rotate(Eigen::MatrixXd &U);
 
@@ -64,6 +67,7 @@ protected:
     CoulombOperator *J;
     ExchangeOperator *K;
     XCOperator *XC;
+    ReactionPotential *U; // Solvent reaction potential
     QMOperatorExp *H_1;   // First order perturbation operators
 };
 

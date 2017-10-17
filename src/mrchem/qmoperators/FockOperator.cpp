@@ -4,6 +4,7 @@
 #include "CoulombOperator.h"
 #include "ExchangeOperator.h"
 #include "XCOperator.h"
+#include "ReactionPotential.h"
 #include "OrbitalAdder.h"
 #include "OrbitalVector.h"
 #include "Orbital.h"
@@ -21,13 +22,15 @@ FockOperator::FockOperator(KineticOperator *t,
                            NuclearPotential *v,
                            CoulombOperator *j,
                            ExchangeOperator *k,
-                           XCOperator *xc)
+                           XCOperator *xc,
+                           ReactionPotential *u)
     : QMOperator(MRA->getMaxScale()),
       T(t),
       V(v),
       J(j),
       K(k),
       XC(xc),
+      U(u),
       H_1(0) {
 }
 
@@ -37,6 +40,7 @@ FockOperator::~FockOperator() {
     this->J = 0;
     this->K = 0;
     this->XC = 0;
+    this->U = 0;
     this->H_1 = 0;
 }
 
@@ -50,6 +54,7 @@ void FockOperator::setup(double prec) {
     if (this->J != 0) this->J->setup(prec);
     if (this->K != 0) this->K->setup(prec);
     if (this->XC != 0) this->XC->setup(prec);
+    if (this->U != 0) this->U->setup(prec);
     if (this->H_1 != 0) this->H_1->setup(prec);
     timer.stop();
     TelePrompter::printFooter(0, timer, 2);
@@ -61,6 +66,7 @@ void FockOperator::clear() {
     if (this->J != 0) this->J->clear();
     if (this->K != 0) this->K->clear();
     if (this->XC != 0) this->XC->clear();
+    if (this->U != 0) this->U->clear();
     if (this->H_1 != 0) this->H_1->clear();
 }
 
@@ -77,6 +83,7 @@ Orbital* FockOperator::operator() (Orbital &orb_p) {
     if (this->J != 0) orbs.push_back((*this->J)(orb_p));
     if (this->K != 0) orbs.push_back((*this->K)(orb_p));
     if (this->XC != 0) orbs.push_back((*this->XC)(orb_p));
+    if (this->U != 0) orbs.push_back((*this->U)(orb_p));
     if (this->H_1 != 0) orbs.push_back((*this->H_1)(orb_p));
 
     vector<complex<double> > coefs;
@@ -103,6 +110,7 @@ double FockOperator::operator() (Orbital &orb_i, Orbital &orb_j) {
     if (this->J != 0) result += (*this->J)(orb_i, orb_j);
     if (this->K != 0) result += (*this->K)(orb_i, orb_j);
     if (this->XC != 0) result += (*this->XC)(orb_i, orb_j);
+    if (this->U != 0) result += (*this->U)(orb_i, orb_j);
     if (this->H_1 != 0) result += (*this->H_1)(orb_i, orb_j);
     return result;
 }
@@ -157,6 +165,7 @@ MatrixXd FockOperator::operator() (OrbitalVector &i_orbs, OrbitalVector &j_orbs)
 	    }
 	}
 	if (this->XC != 0) resultChunk += (*this->XC)(rcvOrbs,orbVecChunk_j);
+	if (this->U != 0) resultChunk += (*this->U)(rcvOrbs,orbVecChunk_j);
 
 	//copy results into final matrix
 	int j = 0;
@@ -209,6 +218,12 @@ MatrixXd FockOperator::operator() (OrbitalVector &i_orbs, OrbitalVector &j_orbs)
         timer.stop();
         TelePrompter::printDouble(0, "Exchange-Correlation matrix", timer.getWallTime());
     }
+    if (this->U != 0) {
+        Timer timer;
+        result += (*this->U)(i_orbs, j_orbs);
+        timer.stop();
+        TelePrompter::printDouble(0, "Reaction potential matrix", timer.getWallTime());
+    }
     if (this->H_1 != 0) {
         Timer timer;
         result += (*this->H_1)(i_orbs, j_orbs);
@@ -232,6 +247,7 @@ MatrixXd FockOperator::adjoint(OrbitalVector &i_orbs, OrbitalVector &j_orbs) {
     if (this->J != 0) result += (*this->J).adjoint(i_orbs, j_orbs);
     if (this->K != 0) result += (*this->K).adjoint(i_orbs, j_orbs);
     if (this->XC != 0) result += (*this->XC).adjoint(i_orbs, j_orbs);
+    if (this->U != 0) result += (*this->U).adjoint(i_orbs, j_orbs);
     if (this->H_1 != 0) result += (*this->H_1).adjoint(i_orbs, j_orbs);
     return result;
 }
@@ -244,6 +260,7 @@ Orbital* FockOperator::applyPotential(Orbital &orb_p) {
     if (this->J != 0) orbs.push_back((*this->J)(orb_p));
     if (this->K != 0) orbs.push_back((*this->K)(orb_p));
     if (this->XC != 0) orbs.push_back((*this->XC)(orb_p));
+    if (this->U != 0) orbs.push_back((*this->U)(orb_p));
 
     vector<complex<double> > coefs;
     for (int i = 0; i < orbs.size(); i++) coefs.push_back(1.0);
@@ -269,6 +286,7 @@ double FockOperator::applyPotential(Orbital &orb_i, Orbital &orb_j) {
     if (this->J != 0) result += (*this->J)(orb_i, orb_j);
     if (this->K != 0) result += (*this->K)(orb_i, orb_j);
     if (this->XC != 0) result += (*this->XC)(orb_i, orb_j);
+    if (this->U != 0) result += (*this->U)(orb_i, orb_j);
     return result;
 }
 
@@ -279,6 +297,7 @@ MatrixXd FockOperator::applyPotential(OrbitalVector &i_orbs, OrbitalVector &j_or
     if (this->J != 0) result += (*this->J)(i_orbs, j_orbs);
     if (this->K != 0) result += (*this->K)(i_orbs, j_orbs);
     if (this->XC != 0) result += (*this->XC)(i_orbs, j_orbs);
+    if (this->U != 0) result += (*this->U)(i_orbs, j_orbs);
     return result;
 }
 
@@ -347,6 +366,10 @@ SCFEnergy FockOperator::trace(OrbitalVector &phi, MatrixXd &F) {
             if (this->XC != 0) {
                 println(2, "\n<" << i << "|V_xc|" << i << ">");
                 E_xc2 += occ*(*this->XC)(phi_i,phi_i);
+            }
+            if (this->U != 0) {
+                println(2, "\n<" << i << "|U_r|" << i << ">");
+                NOT_IMPLEMENTED_ABORT;
             }
         }
     }

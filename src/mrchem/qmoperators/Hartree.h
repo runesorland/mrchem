@@ -6,8 +6,9 @@ class Hartree : public FockOperator {
 public:
     Hartree(KineticOperator &t,
             NuclearPotential &v,
-            CoulombOperator &j)
-        : FockOperator(&t, &v, &j) { }
+            CoulombOperator &j,
+            ReactionPotential *u = 0)
+        : FockOperator(&t, &v, &j, 0, 0, u) { }
     virtual ~Hartree() { }
 };
 

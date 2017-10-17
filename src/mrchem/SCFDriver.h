@@ -36,6 +36,7 @@ class CoulombPotential;
 class KineticOperator;
 class NuclearPotential;
 class ExchangePotential;
+class ReactionPotential;
 class XCPotential;
 class XCFunctional;
 
@@ -209,6 +210,7 @@ protected:
     NuclearPotential *V;
     CoulombPotential *J;
     ExchangePotential *K;
+    ReactionPotential *U_r;
     XCPotential *XC;
     FockOperator *fock;
     Eigen::MatrixXd F;

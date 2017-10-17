@@ -47,6 +47,7 @@
 #include "NuclearPotential.h"
 #include "CoulombPotential.h"
 #include "ExchangePotential.h"
+#include "ReactionPotential.h"
 #include "XCPotential.h"
 #include "XCFunctional.h"
 #include "IdentityOperator.h"
@@ -167,6 +168,7 @@ SCFDriver::SCFDriver(Getkw &input) {
     J = 0;
     K = 0;
     XC = 0;
+    U_r = 0;
     fock = 0;
 
     phi_np1 = 0;
@@ -370,16 +372,17 @@ void SCFDriver::setup() {
     if (diff_kin == "ABGV_00") T = new KineticOperator(*ABGV_00);
     if (diff_kin == "ABGV_55") T = new KineticOperator(*ABGV_55);
     V = new NuclearPotential(*nuclei, nuc_prec);
+    U_r = 0;//new ReactionPotential();
 
     if (wf_method == "Core") {
-        fock = new CoreHamiltonian(*T, *V);
+        fock = new CoreHamiltonian(*T, *V, U_r);
     } else if (wf_method == "Hartree") {
         J = new CoulombPotential(*P, *phi);
-        fock = new Hartree(*T, *V, *J);
+        fock = new Hartree(*T, *V, *J, U_r);
     } else if (wf_method == "HF") {
         J = new CoulombPotential(*P, *phi);
         K = new ExchangePotential(*P, *phi);
-        fock = new HartreeFock(*T, *V, *J, *K);
+        fock = new HartreeFock(*T, *V, *J, *K, U_r);
     } else if (wf_method == "DFT") {
         J = new CoulombPotential(*P, *phi);
         xcfun = new XCFunctional(dft_spin, dft_cutoff);
@@ -390,7 +393,7 @@ void SCFDriver::setup() {
         if (dft_x_fac > MachineZero) {
             K = new ExchangePotential(*P, *phi, dft_x_fac);
         }
-        fock = new DFT(*T, *V, *J, *XC, K);
+        fock = new DFT(*T, *V, *J, *XC, K, U_r);
     } else {
         MSG_ERROR("Invalid method");
     }
@@ -407,6 +410,7 @@ void SCFDriver::clear() {
     if (xcfun != 0) delete xcfun;
 
     if (fock != 0) delete fock;
+    if (U_r != 0) delete U_r;
     if (XC != 0) delete XC;
     if (K != 0) delete K;
     if (J != 0) delete J;

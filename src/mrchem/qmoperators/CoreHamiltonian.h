@@ -5,8 +5,9 @@
 class CoreHamiltonian : public FockOperator {
 public:
     CoreHamiltonian(KineticOperator &t,
-                    NuclearPotential &v)
-        : FockOperator(&t, &v) { }
+                    NuclearPotential &v,
+                    ReactionPotential *u = 0)
+        : FockOperator(&t, &v, 0, 0, 0, u) { }
     virtual ~CoreHamiltonian() { }
 };
 
