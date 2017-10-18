@@ -39,7 +39,7 @@ class ExchangePotential;
 class ReactionPotential;
 class XCPotential;
 class XCFunctional;
-
+class CavityFunction;
 
 class ResponseCalculation {
 public:
@@ -203,6 +203,7 @@ protected:
     ABGVOperator<3> *ABGV_55;
 
     // Unperturbed quantities
+    CavityFunction *cavity;
     Molecule *molecule;
     Nuclei *nuclei;
     OrbitalVector *phi;

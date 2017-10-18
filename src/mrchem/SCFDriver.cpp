@@ -52,6 +52,8 @@
 #include "XCFunctional.h"
 #include "IdentityOperator.h"
 
+#include "CavityFunction.h"
+
 using namespace std;
 using namespace Eigen;
 
@@ -372,7 +374,11 @@ void SCFDriver::setup() {
     if (diff_kin == "ABGV_00") T = new KineticOperator(*ABGV_00);
     if (diff_kin == "ABGV_55") T = new KineticOperator(*ABGV_55);
     V = new NuclearPotential(*nuclei, nuc_prec);
-    U_r = 0;//new ReactionPotential();
+
+    //cavity/cavity inverse
+    cavity = new CavityFunction(*nuclei, 0.2, 1.0, 10.0);
+
+    U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
 
     if (wf_method == "Core") {
         fock = new CoreHamiltonian(*T, *V, U_r);

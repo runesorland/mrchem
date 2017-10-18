@@ -1,14 +1,15 @@
-#ifndef CAVITYFUNCTION_H
-#define CAVITYFUNCTION_H
-
+#pragma once
+#include "MathUtils.h"
 #include "RepresentableFunction.h"
 #include "Nucleus.h"
 
 class CavityFunction : public RepresentableFunction<3> {
 public:
-    CavityFunction(const Nuclei &nucs, double s, bool i = false, double eps_0 = 1.0, double eps_inf=10.0)
-        : nuclei(nucs), slope(s), inverse(i), epsilon_0(eps_0), epsilon_inf(eps_inf) { }
+    CavityFunction(const Nuclei &nucs, double s, double eps_0 = 1.0, double eps_inf=10.0)
+        : nuclei(nucs), slope(s), inverse(false), epsilon_0(eps_0), epsilon_inf(eps_inf) { }
     virtual ~CavityFunction() { }
+
+    void setInverse(bool i) { this->inverse = i; }
 
     double getEpsilon_0() const { return epsilon_0; }
     double getEpsilon_inf() const { return epsilon_inf; }
@@ -20,6 +21,8 @@ public:
             const double *coord = nuc.getCoord();
             //double rad = Input.get<double>("Cavity.radius"); 
             double rad = nuc.getElement().getVdw();
+            //println(0, "Radius " << rad);
+            //double rad = 3.78;
 
             double s = MathUtils::calcDistance(3, coord, r) - rad;
             double theta = 0.5*(1.0 + erf(s/this->slope));
@@ -49,4 +52,3 @@ protected:
     double epsilon_inf; //outside cavity
 };
 
-#endif // CAVITYFUNCTION_H

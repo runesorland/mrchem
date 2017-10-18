@@ -322,6 +322,8 @@ SCFEnergy FockOperator::trace(OrbitalVector &phi, MatrixXd &F) {
     double E_ee = 0.0;
     double E_xc = 0.0;
     double E_x = 0.0;
+    double E_r_el = 0.0;
+    double E_r_nuc = 0.0;
 
     // Nuclear part
     if (this->V != 0) {
@@ -339,6 +341,11 @@ SCFEnergy FockOperator::trace(OrbitalVector &phi, MatrixXd &F) {
                 E_nuc += (Z_i*Z_j)/r_ij;
             }
         }
+    }
+    if (this->U != 0) {
+        FunctionTree<3> &rho_nuc = this->U->getNuclearDensity();
+        FunctionTree<3> &U_r = this->U->real();
+        E_r_nuc += 0.5*rho_nuc.dot(U_r);
     }
 
     // Electronic part
@@ -369,7 +376,7 @@ SCFEnergy FockOperator::trace(OrbitalVector &phi, MatrixXd &F) {
             }
             if (this->U != 0) {
                 println(2, "\n<" << i << "|U_r|" << i << ">");
-                NOT_IMPLEMENTED_ABORT;
+                E_r_el += 0.5*occ*(*this->U)(phi_i,phi_i);
             }
         }
     }
@@ -389,10 +396,10 @@ SCFEnergy FockOperator::trace(OrbitalVector &phi, MatrixXd &F) {
     E_xc2 = tmp[4];
 #endif
 
-    double E_eex = E_ee + E_x;
+    double E_r = E_r_el +  E_r_nuc;
     double E_orbxc2 = E_orb - E_xc2;
-    E_kin = E_orbxc2 - 2.0*E_eex - E_en;
-    E_el = E_orbxc2 - E_eex + E_xc;
+    E_kin = E_orbxc2 - 2.0*(E_ee + E_x + E_r_el) - E_en;
+    E_el = E_orbxc2 - E_ee - E_x - E_r_el + E_r_nuc + E_xc;
 
-    return SCFEnergy(E_nuc, E_el, E_orb, E_kin, E_en, E_ee, E_xc, E_x);
+    return SCFEnergy(E_nuc, E_el, E_orb, E_kin, E_en, E_ee, E_xc, E_x, E_r);
 }
