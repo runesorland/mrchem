@@ -39,14 +39,14 @@ const Element& PeriodicTable::getElement(int Z) const {
 
 const Element PeriodicTable::elements[PeriodicTable::nElements] = {
     Element(   1, "Q" , "Dummy"         ,   0.0000000, 0.000000, 0.000000, -1.000000 ),
-    Element(   1, "H" , "Hydrogen"      ,   1.0079400, 0.790000, 0.320000, -1.000000 ),
+    Element(   1, "H" , "Hydrogen"      ,   1.0079400, 2.494438, 0.320000, -1.000000 ),
     Element(   2, "He", "Helium"        ,   4.0026020, 0.490000, 0.930000, -1.000000 ),
     Element(   3, "Li", "Lithium"       ,   6.9410000, 2.050000, 1.230000, -1.000000 ),
     Element(   4, "Be", "Beryllium"     ,   9.0121820, 1.400000, 0.900000, -1.000000 ),
     Element(   5, "B" , "Boron"         ,  10.8110000, 1.170000, 0.820000, -1.000000 ),
     Element(   6, "C" , "Carbon"        ,  12.0110000, 0.910000, 0.770000, -1.000000 ),
     Element(   7, "N" , "Nitrogen"      ,  14.0067400, 0.750000, 0.750000, -1.000000 ),
-    Element(   8, "O" , "Oxygen"        ,  15.9994000, 0.650000, 0.730000, -1.000000 ),
+    Element(   8, "O" , "Oxygen"        ,  15.9994000, 3.159622, 0.730000, -1.000000 ),
     Element(   9, "F" , "Fluorine"      ,  18.9984032, 0.570000, 0.720000, -1.000000 ),
     Element(  10, "Ne", "Neon"          ,  20.1797000, 0.510000, 0.710000, -1.000000 ),
     Element(  11, "Na", "Sodium"        ,  22.9897680, 2.230000, 1.540000, -1.000000 ),
