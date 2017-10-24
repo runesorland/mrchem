@@ -133,6 +133,11 @@ protected:
     int mol_multiplicity;
     std::vector<std::string> mol_coords;
 
+    // Cavity input
+    double slope;
+    double eps_0;
+    double eps_inf;
+
     // Wavefunction input
     bool wf_restricted;
     std::string wf_method;

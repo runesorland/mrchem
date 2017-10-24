@@ -67,6 +67,10 @@ SCFDriver::SCFDriver(Getkw &input) {
     gauge = input.getDblVec("MRA.gauge_origin");
     center_of_mass = input.get<bool>("MRA.center_of_mass");
 
+    slope = input.get<double>("Cavity.slope");
+    eps_0 = input.get<double>("Cavity.eps_0");
+    eps_inf = input.get<double>("Cavity.eps_inf");
+
     diff_kin = input.get<string>("Derivatives.kinetic");
     diff_orb = input.get<string>("Derivatives.h_orb");
     diff_pso = input.get<string>("Derivatives.h_pso");
@@ -376,7 +380,7 @@ void SCFDriver::setup() {
     V = new NuclearPotential(*nuclei, nuc_prec);
 
     //cavity/cavity inverse
-    cavity = new CavityFunction(*nuclei, 0.2, 1.0, 10.0);
+    cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf);
 
     U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
 
