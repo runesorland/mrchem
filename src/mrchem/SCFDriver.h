@@ -140,6 +140,7 @@ protected:
     double alpha;
 
     // Wavefunction input
+    bool wf_solvent;
     bool wf_restricted;
     std::string wf_method;
 

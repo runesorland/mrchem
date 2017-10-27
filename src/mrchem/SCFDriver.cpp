@@ -102,6 +102,7 @@ SCFDriver::SCFDriver(Getkw &input) {
     mol_multiplicity = input.get<int>("Molecule.multiplicity");
     mol_coords = input.getData("Molecule.coords");
 
+    wf_solvent = input.get<bool>("WaveFunction.solvent");
     wf_restricted = input.get<bool>("WaveFunction.restricted");
     wf_method = input.get<string>("WaveFunction.method");
 
@@ -381,9 +382,10 @@ void SCFDriver::setup() {
     V = new NuclearPotential(*nuclei, nuc_prec);
 
     //cavity/cavity inverse
-    cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf, alpha);
-
-    U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
+    if (wf_solvent) {
+        cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf, alpha);
+        U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
+    }
 
     if (wf_method == "Core") {
         fock = new CoreHamiltonian(*T, *V, U_r);
