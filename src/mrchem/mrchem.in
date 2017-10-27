@@ -152,6 +152,7 @@ def setup_keywords():
     cavity.add_kw('slope',              'DBL', 0.2)
     cavity.add_kw('eps_0',              'DBL', 1.0)
     cavity.add_kw('eps_inf',            'DBL', 1.0)
+    cavity.add_kw('alpha',              'DBL', 1.1)
     top.add_sect(cavity)
 
     molecule=getkw.Section('Molecule', callback = verify_molecule)

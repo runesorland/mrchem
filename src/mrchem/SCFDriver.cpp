@@ -70,6 +70,7 @@ SCFDriver::SCFDriver(Getkw &input) {
     slope = input.get<double>("Cavity.slope");
     eps_0 = input.get<double>("Cavity.eps_0");
     eps_inf = input.get<double>("Cavity.eps_inf");
+    alpha = input.get<double>("Cavity.alpha");
 
     diff_kin = input.get<string>("Derivatives.kinetic");
     diff_orb = input.get<string>("Derivatives.h_orb");
@@ -380,7 +381,7 @@ void SCFDriver::setup() {
     V = new NuclearPotential(*nuclei, nuc_prec);
 
     //cavity/cavity inverse
-    cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf);
+    cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf, alpha);
 
     U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
 

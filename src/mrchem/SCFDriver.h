@@ -137,6 +137,7 @@ protected:
     double slope;
     double eps_0;
     double eps_inf;
+    double alpha;
 
     // Wavefunction input
     bool wf_restricted;

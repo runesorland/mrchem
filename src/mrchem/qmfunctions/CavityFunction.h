@@ -5,8 +5,8 @@
 
 class CavityFunction : public RepresentableFunction<3> {
 public:
-    CavityFunction(const Nuclei &nucs, double s, double eps_0 = 1.0, double eps_inf=10.0)
-        : nuclei(nucs), slope(s), inverse(false), epsilon_0(eps_0), epsilon_inf(eps_inf) { }
+    CavityFunction(const Nuclei &nucs, double s, double eps_0 = 1.0, double eps_inf=10.0, double a = 1.0)
+        : nuclei(nucs), slope(s), inverse(false), alpha(a),  epsilon_0(eps_0), epsilon_inf(eps_inf) { }
     virtual ~CavityFunction() { }
 
     void setInverse(bool i) { this->inverse = i; }
@@ -15,14 +15,14 @@ public:
     double getEpsilon_inf() const { return epsilon_inf; }
 
     double evalf(const double *r) const {
+        static double AA = 1.889725989; // Angstrom conversion factor
         double c_list[this->nuclei.size()];
         for (int i = 0; i < this->nuclei.size(); i++) {
             const Nucleus &nuc = this->nuclei[i];
             const double *coord = nuc.getCoord();
-            //double rad = Input.get<double>("Cavity.radius"); 
-            double rad = nuc.getElement().getVdw();
-            //println(0, "Radius " << rad);
-            //double rad = 3.78;
+            double vdW = nuc.getElement().getVdw();
+            double rad = this->alpha*vdW*AA;
+            if (rad < 0.0) MSG_FATAL("Element not supported");
 
             double s = MathUtils::calcDistance(3, coord, r) - rad;
             double theta = 0.5*(1.0 + erf(s/this->slope));
@@ -48,6 +48,7 @@ protected:
     Nuclei nuclei;
     double slope;
     bool inverse;
+    double alpha;       //multiplicative factor
     double epsilon_0;   //inside cavity
     double epsilon_inf; //outside cavity
 };
