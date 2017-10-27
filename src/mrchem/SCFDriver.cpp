@@ -631,6 +631,20 @@ void SCFDriver::run() {
     printEigenvalues(*phi, F);
     molecule->printGeometry();
     molecule->printProperties();
+    if (U_r != 0) {
+        double spill_in = U_r->getSpillIn();
+        double spill_out = U_r->getSpillOut();
+        println(0, "                                                            ");
+        println(0, "============================================================");
+        println(0, "                         Spillover                          ");
+        println(0, "------------------------------------------------------------");
+        println(0, "                                                            ");
+        println(0, " In                          " << std::setw(30) << spill_in  );
+        println(0, " Out                         " << std::setw(30) << spill_out );
+        println(0, "                                                            ");
+        println(0, "============================================================");
+        println(0, "                                                            ");
+    }
 }
 
 bool SCFDriver::runGroundState() {

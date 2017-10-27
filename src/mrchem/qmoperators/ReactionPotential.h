@@ -19,8 +19,16 @@ public:
 
     void setup(double prec);
     void clear();
-    FunctionTree<3> &getNuclearDensity() {return *this->rho_nuc;}
+
+    double getSpillIn() const { return spill_in; }
+    double getSpillOut() const { return spill_out; }
+
+    FunctionTree<3> &getNuclearDensity() { return *this->rho_nuc; }
+
 protected:
+    double spill_in;
+    double spill_out;
+    
     OrbitalVector *orbitals;
     PoissonOperator *poisson;
     DerivativeOperator<3> *derivative;
@@ -28,6 +36,7 @@ protected:
 
     FunctionTree<3> *eps;
     FunctionTree<3> *eps_inv;
+    FunctionTree<3> *eps_spill;
     FunctionTree<3> *U_n;
     FunctionTree<3> *d_eps[3];
     FunctionTree<3> *rho_nuc;
@@ -35,6 +44,7 @@ protected:
 
     void calcElectronDensity(double prec);
     void calcNuclearDensity(double prec, const Nuclei &nucs);
-    void calcDielectricFunction(double prec, const Nuclei &nucs);
+    void calcDielectricFunction(double prec);
+    void calcSpilloverFunction(double prec);
 };
 

@@ -27,7 +27,8 @@ ReactionPotential::ReactionPotential(double prec,
           cavity(&cav) {
 
     calcNuclearDensity(prec, nucs);
-    calcDielectricFunction(prec, nucs);
+    calcDielectricFunction(prec);
+    calcSpilloverFunction(prec);
     this->U_n = new FunctionTree<3>(*MRA);
     this->U_n->setZero();
 }
@@ -41,6 +42,9 @@ ReactionPotential::~ReactionPotential() {
     delete this->d_eps[2];
     delete this->U_n;
 }
+
+
+
 
 void ReactionPotential::calcElectronDensity(double prec) {
     Timer timer;
@@ -96,7 +100,7 @@ void ReactionPotential::calcNuclearDensity(double prec, const Nuclei &nucs) {
     TelePrompter::printFooter(0, timer, 2);
 }
 
-void ReactionPotential::calcDielectricFunction(double prec, const Nuclei &nucs) {
+void ReactionPotential::calcDielectricFunction(double prec) {
     Timer timer;
     TelePrompter::printHeader(0, "Projecting dielectric function");
 
@@ -120,6 +124,31 @@ void ReactionPotential::calcDielectricFunction(double prec, const Nuclei &nucs) 
     TelePrompter::printFooter(0, timer, 2);
 }
 
+
+void ReactionPotential::calcSpilloverFunction(double prec) {
+    Timer timer;
+    TelePrompter::printHeader(0, "Projecting spillover function");
+
+    CavityFunction &cav = *this->cavity;
+    cav.setInverse(false);
+    auto f = [cav] (const double *r) -> double {
+        double cav_r = cav.evalf(r);
+        double eps_0 = cav.getEpsilon_0();
+        double eps_inf = cav.getEpsilon_inf();
+        double denom = (eps_inf - eps_0);
+        double result = 1.0;
+        if (fabs(denom) > MachineZero) result = (cav_r - eps_0)/denom;
+        return result;
+    };
+
+    MWProjector<3> project(prec, this->max_scale);
+    this->eps_spill = new FunctionTree<3>(*MRA);
+    project(*this->eps_spill, f);
+
+    timer.stop();
+    TelePrompter::printFooter(0, timer, 2);
+}
+
 void ReactionPotential::setup(double prec) {
     setApplyPrec(prec);
 
@@ -131,6 +160,9 @@ void ReactionPotential::setup(double prec) {
     calcElectronDensity(prec);
     FunctionTree<3> rho(*MRA);
     add(rho, 1.0, *this->rho_el, 1.0, *this->rho_nuc);
+
+    this->spill_out = this->eps_spill->dot(rho);
+    this->spill_in = rho.integrate() - this->spill_out;
 
     //creating rho_eff (rho/eps)
     FunctionTree<3> rho_eff(*MRA);
