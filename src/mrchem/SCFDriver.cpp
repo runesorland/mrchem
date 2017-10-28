@@ -67,10 +67,11 @@ SCFDriver::SCFDriver(Getkw &input) {
     gauge = input.getDblVec("MRA.gauge_origin");
     center_of_mass = input.get<bool>("MRA.center_of_mass");
 
-    slope = input.get<double>("Cavity.slope");
-    eps_0 = input.get<double>("Cavity.eps_0");
-    eps_inf = input.get<double>("Cavity.eps_inf");
-    alpha = input.get<double>("Cavity.alpha");
+    sol_slope = input.get<double>("Solvent.slope");
+    sol_eps_0 = input.get<double>("Solvent.eps_0");
+    sol_eps_inf = input.get<double>("Solvent.eps_inf");
+    sol_alpha = input.get<double>("Solvent.alpha");
+    sol_kain = input.get<int>("Solvent.kain");
 
     diff_kin = input.get<string>("Derivatives.kinetic");
     diff_orb = input.get<string>("Derivatives.h_orb");
@@ -383,8 +384,8 @@ void SCFDriver::setup() {
 
     //cavity/cavity inverse
     if (wf_solvent) {
-        cavity = new CavityFunction(*nuclei, slope, eps_0, eps_inf, alpha);
-        U_r = new ReactionPotential(rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
+        cavity = new CavityFunction(*nuclei, sol_slope, sol_eps_0, sol_eps_inf, sol_alpha);
+        U_r = new ReactionPotential(sol_kain, rel_prec, *P, *ABGV_00, *cavity, *nuclei, *phi);
     }
 
     if (wf_method == "Core") {

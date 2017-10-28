@@ -17,13 +17,15 @@ extern MultiResolutionAnalysis<3> *MRA;
 
 using namespace std;
 
-ReactionPotential::ReactionPotential(double prec,
+ReactionPotential::ReactionPotential(int hist,
+                                     double prec,
                                      PoissonOperator &P,
                                      DerivativeOperator<3> &D,
                                      CavityFunction &cav,
                                      Nuclei &nucs,
                                      OrbitalVector &phi)
-        : orbitals(&phi),
+        : history(hist),
+          orbitals(&phi),
           poisson(&P),
           derivative(&D),
           cavity(&cav) {
@@ -173,7 +175,7 @@ void ReactionPotential::setup(double prec) {
     FunctionTree<3> *U_np1 = 0;
     FunctionTree<3> *U_r = 0;
 
-    KAIN kain(3);
+    KAIN kain(this->history);
 
     int cycle = 0;
     bool converged = false;

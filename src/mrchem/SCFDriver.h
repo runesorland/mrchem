@@ -133,11 +133,12 @@ protected:
     int mol_multiplicity;
     std::vector<std::string> mol_coords;
 
-    // Cavity input
-    double slope;
-    double eps_0;
-    double eps_inf;
-    double alpha;
+    // Solvent input
+    int sol_kain;
+    double sol_slope;
+    double sol_eps_0;
+    double sol_eps_inf;
+    double sol_alpha;
 
     // Wavefunction input
     bool wf_solvent;

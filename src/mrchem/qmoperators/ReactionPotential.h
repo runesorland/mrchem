@@ -9,7 +9,8 @@ class CavityFunction;
 
 class ReactionPotential : public QMPotential {
 public:
-    ReactionPotential(double prec,
+    ReactionPotential(int hist,
+                      double prec,
                       PoissonOperator &P,
                       DerivativeOperator<3> &D,
                       CavityFunction &cav,
@@ -26,6 +27,7 @@ public:
     FunctionTree<3> &getNuclearDensity() { return *this->rho_nuc; }
 
 protected:
+    int history;
     double spill_in;
     double spill_out;
     

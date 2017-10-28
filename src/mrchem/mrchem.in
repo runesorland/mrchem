@@ -148,7 +148,8 @@ def setup_keywords():
     derivatives.add_kw('h_pso',         'STR', 'ABGV_00')
     top.add_sect(derivatives)
 
-    cavity=getkw.Section('Cavity')
+    cavity=getkw.Section('Solvent')
+    cavity.add_kw('kain',               'INT', 0)
     cavity.add_kw('slope',              'DBL', 0.2)
     cavity.add_kw('eps_0',              'DBL', 1.0)
     cavity.add_kw('eps_inf',            'DBL', 1.0)
