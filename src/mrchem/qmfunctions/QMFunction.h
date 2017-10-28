@@ -27,6 +27,9 @@ public:
     void setReal(FunctionTree<3> *real) { this->re = real; }
     void setImag(FunctionTree<3> *imag) { this->im = imag; }
 
+    FunctionTree<3> *getReal() { return this->re; }
+    FunctionTree<3> *getImag() { return this->im; }
+
     FunctionTree<3> &real() { return *this->re; }
     FunctionTree<3> &imag() { return *this->im; }
 

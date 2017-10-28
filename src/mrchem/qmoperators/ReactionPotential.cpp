@@ -10,6 +10,8 @@
 #include "PoissonOperator.h"
 #include "DerivativeOperator.h"
 #include "GaussFunc.h"
+#include "Orbital.h"
+#include "KAIN.h"
 
 extern MultiResolutionAnalysis<3> *MRA;
 
@@ -171,9 +173,12 @@ void ReactionPotential::setup(double prec) {
     FunctionTree<3> *U_np1 = 0;
     FunctionTree<3> *U_r = 0;
 
+    KAIN kain(3);
+
     int cycle = 0;
+    bool converged = false;
     double errorU = 1.0;
-    while (errorU > prec) {
+    while (not converged) {
         cycle++;
 
         //derivative of electrostatic potential
@@ -215,25 +220,53 @@ void ReactionPotential::setup(double prec) {
         U_np1 = new FunctionTree<3>(*MRA);
         apply(*U_np1, *this->poisson, sum_rhoeff_gamma);
 
-        //calculating V_r
-        FunctionTree<3> sum_rhoeff_gamma_neg_rho(*MRA);
-        add(sum_rhoeff_gamma_neg_rho, 1.0, sum_rhoeff_gamma, -1.0, rho);
-
-        //applying Poisson operator
-        if (U_r != 0) delete U_r;
-        U_r = new FunctionTree<3>(*MRA);
-        apply(*U_r, *this->poisson, sum_rhoeff_gamma_neg_rho);
-
         //preparing for next iteration
-        FunctionTree<3> error_func(*MRA);
-        add(error_func, 1.0, *U_n, -1.0, *U_np1);
+        FunctionTree<3> *dU_n = new FunctionTree<3>(*MRA);
+        add(*dU_n, 1.0, *U_np1, -1.0, *U_n);
 
-        errorU = sqrt(error_func.getSquareNorm());
+        if (cycle > 1 and this->history > 0) {
+            OrbitalVector phi_n(0);
+            OrbitalVector dPhi_n(0);
+            phi_n.push_back(1, 2, Orbital::Paired);
+            dPhi_n.push_back(1, 2, Orbital::Paired);
+
+            phi_n.getOrbital(0).setReal(U_n);
+            dPhi_n.getOrbital(0).setReal(dU_n);
+
+            double plevel = TelePrompter::setPrintLevel(-1);
+            kain.accelerate(prec, phi_n, dPhi_n);
+            TelePrompter::setPrintLevel(plevel);
+
+            U_n = phi_n.getOrbital(0).getReal();
+            dU_n = dPhi_n.getOrbital(0).getReal();
+
+            phi_n.clear(false);
+            dPhi_n.clear(false);
+        }
+
+        errorU = sqrt(dU_n->getSquareNorm()/U_np1->getSquareNorm());
+        println(0, setw(3) << cycle << ":  " << errorU);
+
+        delete U_np1;
+        U_np1 = new FunctionTree<3>(*MRA);
+        add(*U_np1, 1.0, *U_n, 1.0, *dU_n);
+        delete dU_n;
+
+        if (errorU < prec) {
+            converged = true;
+
+            //calculating V_r
+            FunctionTree<3> sum_rhoeff_gamma_neg_rho(*MRA);
+            add(sum_rhoeff_gamma_neg_rho, 1.0, sum_rhoeff_gamma, -1.0, rho);
+
+            //applying Poisson operator
+            if (U_r != 0) delete U_r;
+            U_r = new FunctionTree<3>(*MRA);
+            apply(*U_r, *this->poisson, sum_rhoeff_gamma_neg_rho);
+        }
 
         if (U_n != 0) delete U_n;
         U_n = U_np1;
-
-        println(0, setw(3) << cycle << ":  " << errorU);
     }
     this->re = U_r;
     delete this->rho_el;
